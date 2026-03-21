@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTripStore } from "../../lib/store";
 
 const CORAL = "#E85D3A";
 const DARK  = "#1A1A1A";
@@ -216,11 +217,12 @@ function ComparisonRow({ stop, sheetVisible, delay }: { stop: CompStop; sheetVis
 // ─── Main Sheet ───────────────────────────────────────────────────────────────
 
 interface SalvageModeSheetProps {
+  tripId: string;
   onClose: () => void;
   onAccept: () => void;
 }
 
-export function SalvageModeSheet({ onClose, onAccept }: SalvageModeSheetProps) {
+export function SalvageModeSheet({ tripId, onClose, onAccept }: SalvageModeSheetProps) {
   const [selected, setSelected]       = useState<string>("weather");
   const [sheetVisible, setSheetVisible] = useState(false);
   const [accepted, setAccepted]       = useState(false);
@@ -239,6 +241,7 @@ export function SalvageModeSheet({ onClose, onAccept }: SalvageModeSheetProps) {
   }, [selected]);
 
   const handleAccept = () => {
+    useTripStore.getState().applyFallbackSalvage(tripId);
     setAccepted(true);
     setTimeout(() => onAccept(), 700);
   };
