@@ -12,11 +12,12 @@ function capitalize(s: string): string {
 
 interface ExecutionScreenProps {
   tripId: string;
-  onBack: () => void;
+  onHome: () => void;
+  onViewPlan: () => void;
   onSalvage: () => void;
 }
 
-export function ExecutionScreen({ tripId, onBack, onSalvage }: ExecutionScreenProps) {
+export function ExecutionScreen({ tripId, onHome, onViewPlan, onSalvage }: ExecutionScreenProps) {
   const store = useTripStore();
   const trip = store.getTrip(tripId);
   const execution = useTripStore((s) => s.execution);
@@ -58,9 +59,186 @@ export function ExecutionScreen({ tripId, onBack, onSalvage }: ExecutionScreenPr
     return () => clearInterval(tick);
   }, []);
 
-  if (!activeStop || !trip) {
-    onBack();
+  if (!trip) {
+    onHome();
     return null;
+  }
+
+  const tripFinished = !activeStop;
+  const skippedCount = execution.skippedIds.length;
+
+  // Full-screen success flash after completing the final stop (1.2s)
+  if (tripFinished && doneState === "success") {
+    return (
+      <div
+        style={{
+          width: 390,
+          height: 844,
+          background: SAGE,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 14,
+          fontFamily: "'Inter', sans-serif",
+        }}
+      >
+        <style>{`
+          @keyframes done-flash {
+            0%   { opacity: 0; transform: scale(0.8); }
+            40%  { opacity: 1; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+          }
+          .done-icon { animation: done-flash 0.4s ease forwards; }
+        `}</style>
+        <div className="done-icon">
+          <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+            <circle cx="28" cy="28" r="27" stroke="white" strokeWidth="2" opacity="0.4" />
+            <circle cx="28" cy="28" r="22" fill="white" opacity="0.15" />
+            <path d="M17 28l8 8 14-14" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 600, color: "white", letterSpacing: "-0.2px" }}>
+          Day complete!
+        </span>
+        <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: "rgba(255,255,255,0.7)" }}>
+          All {totalStops} stops finished
+        </span>
+      </div>
+    );
+  }
+
+  // Trip completion summary
+  if (tripFinished) {
+    return (
+      <div
+        style={{
+          width: 390,
+          height: 844,
+          background: BG,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          fontFamily: "'Inter', sans-serif",
+        }}
+      >
+        <style>{`
+          @keyframes pop-in {
+            0%   { opacity: 0; transform: scale(0.85) translateY(12px); }
+            60%  { transform: scale(1.02) translateY(0); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+          }
+          .pop-1 { animation: pop-in 0.5s cubic-bezier(0.22,1,0.36,1) 0.1s both; }
+          .pop-2 { animation: pop-in 0.5s cubic-bezier(0.22,1,0.36,1) 0.22s both; }
+          .pop-3 { animation: pop-in 0.5s cubic-bezier(0.22,1,0.36,1) 0.34s both; }
+          .pop-4 { animation: pop-in 0.5s cubic-bezier(0.22,1,0.36,1) 0.48s both; }
+        `}</style>
+
+        {/* Full progress bar */}
+        <div style={{ height: 3, background: CORAL, flexShrink: 0 }} />
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px" }}>
+          <div className="pop-1" style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
+
+          <h1
+            className="pop-2"
+            style={{
+              fontFamily: "'Playfair Display', serif",
+              fontSize: 28,
+              fontWeight: 600,
+              color: DARK,
+              margin: "0 0 8px",
+              letterSpacing: "-0.4px",
+              textAlign: "center",
+            }}
+          >
+            Day complete!
+          </h1>
+
+          <p
+            className="pop-2"
+            style={{
+              fontFamily: "'Inter', sans-serif",
+              fontSize: 14,
+              color: "#8A8278",
+              margin: "0 0 36px",
+              textAlign: "center",
+            }}
+          >
+            {trip.destination}
+          </p>
+
+          {/* Stats */}
+          <div className="pop-3" style={{ display: "flex", gap: 24, marginBottom: 44 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: 700, color: SAGE, fontFamily: "'Inter', sans-serif" }}>
+                {completedCount}
+              </div>
+              <div style={{ fontSize: 11, color: "#8A8278", letterSpacing: "0.06em", textTransform: "uppercase" as const, fontFamily: "'Inter', sans-serif", marginTop: 2 }}>
+                completed
+              </div>
+            </div>
+            {skippedCount > 0 && (
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#B0A99F", fontFamily: "'Inter', sans-serif" }}>
+                  {skippedCount}
+                </div>
+                <div style={{ fontSize: 11, color: "#B0A99F", letterSpacing: "0.06em", textTransform: "uppercase" as const, fontFamily: "'Inter', sans-serif", marginTop: 2 }}>
+                  skipped
+                </div>
+              </div>
+            )}
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: 700, color: DARK, fontFamily: "'Inter', sans-serif" }}>
+                {totalStops}
+              </div>
+              <div style={{ fontSize: 11, color: "#8A8278", letterSpacing: "0.06em", textTransform: "uppercase" as const, fontFamily: "'Inter', sans-serif", marginTop: 2 }}>
+                total
+              </div>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="pop-4" style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+            <button
+              onClick={onViewPlan}
+              style={{
+                width: "100%",
+                padding: "15px 24px",
+                background: CORAL,
+                border: "none",
+                borderRadius: 14,
+                color: "white",
+                fontSize: 15,
+                fontWeight: 600,
+                fontFamily: "'Inter', sans-serif",
+                cursor: "pointer",
+                boxShadow: "0 4px 20px rgba(232,93,58,0.32)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              View Trip Summary
+            </button>
+            <button
+              onClick={onHome}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "'Playfair Display', serif",
+                fontStyle: "italic",
+                fontSize: 14,
+                color: "#A09888",
+                padding: "6px 0",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              Back to Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const activity = activeStop.activity;
@@ -100,35 +278,23 @@ export function ExecutionScreen({ tripId, onBack, onSalvage }: ExecutionScreenPr
 
   const handleDone = () => {
     if (doneState !== "idle") return;
-    const isLast = activeStopIndex >= totalStops - 1;
-    const nextStopName =
-      !isLast ? itinerary[activeStopIndex + 1]?.activity.name : null;
+    const nextStopName = itinerary[activeStopIndex + 1]?.activity.name ?? null;
 
-    setDoneInfo({ headingTo: nextStopName ?? null });
+    setDoneInfo({ headingTo: nextStopName });
     setDoneState("success");
     store.advanceStop(tripId);
 
     setTimeout(() => {
-      if (isLast) {
-        onBack();
-      } else {
-        setDoneState("idle");
-        setDoneInfo(null);
-      }
+      setDoneState("idle");
+      setDoneInfo(null);
     }, 1200);
   };
 
   const handleSkip = () => {
-    const isLast = activeStopIndex >= totalStops - 1;
     store.skipStop(tripId);
 
     if (store.shouldTriggerSalvage(tripId)) {
       onSalvage();
-      return;
-    }
-
-    if (isLast) {
-      onBack();
     }
   };
 
@@ -213,10 +379,50 @@ export function ExecutionScreen({ tripId, onBack, onSalvage }: ExecutionScreenPr
         />
       </div>
 
+      {/* ── TOP BAR ── */}
+      <div className="status-in" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 48, paddingLeft: 20, paddingRight: 20, flexShrink: 0 }}>
+        <button
+          onClick={onViewPlan}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 0",
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M12.5 5L7.5 10l5 5" stroke={DARK} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, fontWeight: 500, color: DARK, letterSpacing: "-0.1px" }}>
+            Plan
+          </span>
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <div
+            className="live-dot"
+            style={{ width: 6, height: 6, borderRadius: "50%", background: CORAL }}
+          />
+          <span
+            style={{
+              fontFamily: "'SF Mono', 'Fira Code', monospace",
+              fontSize: 12,
+              color: CORAL,
+              fontWeight: 600,
+              letterSpacing: "0.04em",
+            }}
+          >
+            {formatClock(clockTime)}
+          </span>
+        </div>
+      </div>
+
       {/* ── STATUS ROW ── */}
       <div
-        className="status-in"
-        style={{ paddingTop: 48, paddingLeft: 20, paddingRight: 20, flexShrink: 0 }}
+        style={{ paddingLeft: 20, paddingRight: 20, paddingTop: 8, flexShrink: 0 }}
       >
         <div
           style={{
@@ -279,29 +485,6 @@ export function ExecutionScreen({ tripId, onBack, onSalvage }: ExecutionScreenPr
               }}
             >
               {completedCount} of {totalStops} stops
-            </span>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <div
-              className="live-dot"
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: CORAL,
-              }}
-            />
-            <span
-              style={{
-                fontFamily: "'SF Mono', 'Fira Code', monospace",
-                fontSize: 12,
-                color: CORAL,
-                fontWeight: 600,
-                letterSpacing: "0.04em",
-              }}
-            >
-              {formatClock(clockTime)}
             </span>
           </div>
         </div>
@@ -670,11 +853,13 @@ export function ExecutionScreen({ tripId, onBack, onSalvage }: ExecutionScreenPr
       {nextStop ? (
         <div className="next-in" style={{ margin: "10px 16px 0", flexShrink: 0 }}>
           <div
+            onClick={onViewPlan}
             style={{
               background: "white",
               borderRadius: 18,
               overflow: "hidden",
               boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+              cursor: "pointer",
             }}
           >
             <div
@@ -750,7 +935,7 @@ export function ExecutionScreen({ tripId, onBack, onSalvage }: ExecutionScreenPr
                     }}
                   >
                     +{upcomingStops.length} stop
-                    {upcomingStops.length !== 1 ? "s" : ""}
+                    {upcomingStops.length !== 1 ? "s" : ""}{" "}›
                   </span>
                 </div>
 
@@ -908,12 +1093,14 @@ export function ExecutionScreen({ tripId, onBack, onSalvage }: ExecutionScreenPr
           style={{ margin: "10px 16px 0", flexShrink: 0 }}
         >
           <div
+            onClick={onViewPlan}
             style={{
               background: "white",
               borderRadius: 18,
               padding: "20px 16px",
               boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
               textAlign: "center",
+              cursor: "pointer",
             }}
           >
             <p
@@ -931,7 +1118,7 @@ export function ExecutionScreen({ tripId, onBack, onSalvage }: ExecutionScreenPr
         </div>
       )}
 
-      {/* ── BOTTOM HINT ── */}
+      {/* ── BOTTOM: adjust hint ── */}
       <div
         className="hint-in"
         style={{

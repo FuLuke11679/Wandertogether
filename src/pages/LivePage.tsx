@@ -13,10 +13,7 @@ export function LivePage() {
 
   useEffect(() => {
     if (!tripId) return;
-    const { execution } = useTripStore.getState();
-    if (!execution.startedAt) {
-      useTripStore.getState().startExecution(tripId);
-    }
+    useTripStore.getState().startExecution(tripId);
   }, [tripId]);
 
   if (!tripId) {
@@ -28,7 +25,8 @@ export function LivePage() {
     <>
       <ExecutionScreen
         tripId={tripId}
-        onBack={() => navigate(`/trip/${tripId}/plan`)}
+        onHome={() => navigate("/")}
+        onViewPlan={() => navigate(`/trip/${tripId}/plan`)}
         onSalvage={() => setSalvageOpen(true)}
       />
 
