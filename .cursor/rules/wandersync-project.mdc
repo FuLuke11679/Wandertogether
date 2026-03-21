@@ -1,0 +1,112 @@
+---
+description: WanderSync project architecture, stack, and conversion plan
+alwaysApply: true
+---
+
+# WanderSync — Agent Guide
+
+## What This Is
+
+WanderSync is a group travel planning app being built for HackDuke: Code for Good 2026 (Interactive Media track). Users paste travel links → AI extracts locations → group members vote via pairwise comparison → app generates an optimized day itinerary → users follow it in real-time → when plans break, the app replans automatically.
+
+The `/src/app/components/` directory contains **Figma Make-generated TSX components** — these are the visual source of truth for every screen. Transform these presentational components into a fully functional application with real state management, routing, and animations.
+
+## Current State
+
+- Vite dev server with React 18 + React Router 7
+- All screens in `src/app/components/*.tsx` as presentational components
+- Navigation via `useState<Screen>` in `src/app/App.tsx` — must migrate to React Router
+- No state management — all data is hardcoded inline
+- No API layer, no shared types file, no store
+- Tailwind CSS 4 with shadcn/radix primitives in `src/app/components/ui/`
+- Framer Motion already installed as the `motion` package
+
+## Target Stack — DO NOT migrate to Next.js. Keep Vite + React Router.
+
+| Layer       | Technology                                         |
+|-------------|----------------------------------------------------|
+| Bundler     | Vite (keep existing `vite.config.ts`)              |
+| Framework   | React 18 + React Router 7                         |
+| Styling     | Tailwind CSS 4                                     |
+| State       | Zustand                                            |
+| Animations  | Framer Motion (import from `motion/react`)         |
+| Maps        | Mapbox GL JS or Google Maps                        |
+| AI/LLM      | Anthropic SDK (`claude-sonnet-4-20250514`) via proxy |
+| Fonts       | DM Serif Display (headings), DM Sans (body), JetBrains Mono (data) |
+
+## Route Structure (React Router)
+
+All routes defined in `src/app/App.tsx` using `<Routes>`:
+
+```
+/                            → Trip Home (screen 1)
+/trip/:id/import             → Import Content (screen 2)
+/trip/:id/vote               → Pairwise Comparison (screen 3)
+/trip/:id/results            → Group Results (screen 4)
+/trip/:id/preferences        → Trip Preferences (screen 5)
+/trip/:id/plan               → Day Itinerary + Map (screen 6)
+/trip/:id/live               → Execution Mode (screen 7)
+```
+
+SalvageModal is an overlay on `/trip/:id/live`, not its own route.
+
+## Project Structure
+
+```
+/src
+  /app
+    App.tsx                      ← React Router <Routes> + layout shell
+  /pages
+    HomePage.tsx                 ← Screen 1: trip list, create trip
+    ImportPage.tsx               ← Screen 2: paste URLs, AI extracts
+    VotePage.tsx                 ← Screen 3: pairwise comparison
+    ResultsPage.tsx              ← Screen 4: merged group rankings
+    PreferencesPage.tsx          ← Screen 5: pace, budget, focus
+    PlanPage.tsx                 ← Screen 6: map + timeline
+    LivePage.tsx                 ← Screen 7: execution mode
+  /components
+    ActivityCard.tsx
+    PairwiseComparison.tsx
+    Timeline.tsx
+    ExecutionCard.tsx
+    SalvageModal.tsx             ← Screen 8 (overlay, not a page)
+    MapView.tsx
+    PreferencesForm.tsx
+    GroupResultsList.tsx
+    TripCard.tsx
+    NewTripModal.tsx
+  /lib
+    store.ts                     ← Zustand store
+    ranking.ts                   ← Elo algorithm + group merge
+    prompts.ts                   ← LLM prompt templates
+    types.ts                     ← All TypeScript types
+    seed-data.ts                 ← Demo activities for Tokyo
+    api.ts                       ← Client-side API helpers with fallbacks
+  /styles
+    (keep existing CSS files)
+```
+
+## API Strategy
+
+For the hackathon demo, LLM calls are handled client-side with hardcoded fallbacks:
+
+1. **Primary**: Hardcoded fallback responses in `/lib/api.ts` — no API key needed, demo always works
+2. **Stretch**: Vite dev server proxy to Anthropic API via `vite.config.ts` → `server.proxy`
+
+## Build Priority
+
+1. Types + seed data + Zustand store (foundation)
+2. React Router setup in App.tsx (replace useState navigation)
+3. Pairwise voting with Elo (core differentiator)
+4. Execution mode with countdown timer
+5. Salvage mode with replan animation
+6. Itinerary generation (hardcoded fallback OK)
+7. Map integration, URL import, trip creation (nice-to-have)
+
+## Key Constraints
+
+- Mobile-first: 390×844 viewport, 44px minimum touch targets
+- All LLM features MUST have hardcoded fallbacks so the demo works without API keys
+- Seed data: 15 Tokyo activities with real coordinates
+- Demo must work end-to-end with seed data alone
+- Preserve original Figma component files as visual reference — create new files in `/src/pages/` and `/src/components/`

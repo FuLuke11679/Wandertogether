@@ -1,0 +1,49 @@
+---
+description: How to convert Figma Make components into functional pages
+alwaysApply: true
+---
+
+# Figma Make Migration Rules
+
+The files in `src/app/components/*.tsx` (HomeScreen, ImportScreen, VotingScreen, ResultsScreen, PreferencesScreen, BuildingItineraryScreen, ItineraryScreen, ExecutionScreen, SalvageModeSheet, CreateTripSheet, PlaceSelectionSheet) are Figma Make exports. They contain the correct visual design but no real logic.
+
+## What to KEEP
+
+- JSX structure and component hierarchy (the layout is correct)
+- Tailwind utility classes (spacing, sizing, colors, typography)
+- Visual constants: `CORAL=#E85D3A`, `SAGE=#2D5F4E`, `BG=#FAFAF8`, `DARK=#1A1A1A`
+- Image URLs and placeholder content
+- Layout patterns (flex, grid, positioning)
+- Existing shadcn/radix primitives in `src/app/components/ui/` — use them for modals, sheets, and form controls
+
+## What to REPLACE
+
+- `useState<Screen>` navigation in App.tsx → React Router `<Routes>` + `useNavigate()`
+- Callback props like `onBack`, `onSeeResults` → `useNavigate()` calls
+- Hardcoded data arrays inside components → Zustand store selectors
+- CSS `@keyframes` in `<style>` tags → Framer Motion `motion.*` components (import from `motion/react`)
+- `onClick={() => setScreen("x")}` → `navigate("/trip/${id}/x")`
+- `setTimeout`-based transitions → `AnimatePresence` + motion variants
+- Inline `style={{}}` objects → Tailwind classes where possible; keep inline styles only for truly dynamic values (countdown colors, computed transforms)
+
+## What to DELETE
+
+- The `Screen` type union and `useState<Screen>` in `src/app/App.tsx`
+- The phone-shell wrapper div (390×844 with `borderRadius: 44` and `boxShadow`) — the app should fill the real mobile viewport
+- Any Figma Make runtime code (`figma_app.min.js` or similar)
+
+## Migration Pattern for Each Screen
+
+1. Create a page file in `/src/pages/` (e.g., `VotePage.tsx`)
+2. Copy JSX from the matching Figma component (e.g., `VotingScreen.tsx`)
+3. Add a `<Route path="/trip/:id/vote" element={<VotePage />} />` in App.tsx
+4. Read the trip `:id` param with `useParams()`
+5. Extract hardcoded data into the Zustand store; read via selectors
+6. Replace callback props (`onBack`, `onSeeResults`) with `useNavigate()`
+7. Convert CSS `@keyframes` animations to framer-motion
+8. Add real interactivity (store actions, API calls)
+9. Keep the visual design pixel-perfect to the Figma original
+
+## Preserve the Originals
+
+Do NOT delete or modify files in `src/app/components/`. They are the visual reference. Create new files in `/src/pages/` and `/src/components/` that replicate and extend the visual structure.

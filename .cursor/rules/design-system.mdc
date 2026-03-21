@@ -1,0 +1,69 @@
+---
+description: WanderSync design tokens, typography, and visual component patterns
+globs: "**/*.tsx"
+alwaysApply: false
+---
+
+# Design System
+
+## Color Tokens
+
+| Token          | Hex       | Tailwind                     | Usage                          |
+|----------------|-----------|------------------------------|--------------------------------|
+| Coral          | `#E85D3A` | `text-[#E85D3A]` / `bg-[#E85D3A]` | CTAs, active states, progress |
+| Sage           | `#2D5F4E` | `text-[#2D5F4E]` / `bg-[#2D5F4E]` | Confirmations, "Done", map   |
+| Background     | `#FAFAF8` | `bg-[#FAFAF8]`              | Page background (warm off-white) |
+| Surface        | `#FFFFFF` | `bg-white`                   | Cards                          |
+| Text primary   | `#1A1A1A` | `text-[#1A1A1A]`            | Headings, body text            |
+| Text secondary | `#6B6B6B` | `text-[#6B6B6B]`            | Captions, metadata             |
+| Border         | `#E8E6E2` | `border-[#E8E6E2]`          | Dividers, card borders         |
+
+## Typography
+
+- Headings: `font-['DM_Serif_Display'] tracking-tight`
+- Body text: `font-['DM_Sans']`
+- Data / time / monospace: `font-['JetBrains_Mono'] tabular-nums`
+- Italic prompts (e.g., "Which would you rather do?"): `font-['Playfair_Display'] italic`
+
+## Component Recipes
+
+**Cards**
+`bg-white rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.04)]`
+
+**Primary CTA button**
+`bg-[#E85D3A] text-white h-11 rounded-lg font-medium text-sm`
+
+**Secondary button**
+`border border-[#E8E6E2] rounded-lg h-11 text-sm font-medium`
+
+**Done / confirm button**
+`bg-[#2D5F4E] text-white h-11 rounded-lg font-semibold shadow-[0_3px_12px_rgba(45,95,78,0.45)]`
+
+**Category pills**
+`rounded-full px-3 py-1 text-sm` — coral fill (`bg-[#E85D3A] text-white`) when selected, border-only (`border border-[#E8E6E2]`) when not
+
+**Glass pills (on images)**
+`bg-white/16 border border-white/28 backdrop-blur-[10px] rounded-full px-3 py-1.5 text-white text-xs font-medium`
+
+**Bottom sheets**
+Use the `vaul` Drawer (already available as shadcn `Drawer` in `ui/drawer.tsx`). Style the handle and overlay, add `rounded-t-2xl bg-white`.
+
+## Layout
+
+- Design viewport: 390×844 (iPhone 14) — build mobile-first, let it scale
+- Touch targets: minimum `h-11` (44px) on all interactive elements
+- Page padding: `px-5` (20px) horizontal
+- Card gaps: `gap-3` (12px)
+- Section spacing: `pt-6` or `pt-5` between major sections
+
+## Avatar Stack Pattern
+
+Overlapping circular avatars with offset `ml-[-9px]` and `z-index` descending. Each avatar gets a unique background from the palette:
+
+```
+#FDDFD4 / #C44B29 (coral)
+#D4EAE3 / #1E5A44 (sage)
+#F5ECD4 / #8A6020 (gold)
+#EAD4F5 / #6B2D8A (purple)
+#D4E8F5 / #1E5A8A (blue)
+```

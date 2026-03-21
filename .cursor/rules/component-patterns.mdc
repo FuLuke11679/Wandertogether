@@ -1,0 +1,83 @@
+---
+description: Component patterns, routing, and animation conventions for WanderSync TSX files
+globs: "**/*.tsx"
+alwaysApply: false
+---
+
+# Component Conventions
+
+## Routing
+
+Use React Router for all navigation. Never use `useState` to switch between screens.
+
+```tsx
+import { useNavigate, useParams } from "react-router";
+
+export default function VotePage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+
+  const handleComplete = () => navigate(`/trip/${id}/results`);
+  const handleBack = () => navigate(-1);
+}
+```
+
+## Page Animations (Framer Motion)
+
+Wrap every page in a `motion.div` with horizontal slide transitions. Use `AnimatePresence` in `App.tsx` around the `<Routes>` outlet.
+
+```tsx
+import { motion } from "motion/react";
+
+const pageVariants = {
+  enter: { x: "100%", opacity: 0 },
+  center: { x: 0, opacity: 1, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } },
+  exit: { x: "-50%", opacity: 0, transition: { duration: 0.2 } },
+};
+
+export default function SomePage() {
+  return (
+    <motion.div variants={pageVariants} initial="enter" animate="center" exit="exit">
+      {/* page content */}
+    </motion.div>
+  );
+}
+```
+
+Card transitions use scale + fade:
+
+```tsx
+const cardVariants = {
+  hidden: { opacity: 0, y: 20, scale: 0.97 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.38, ease: [0.22, 1, 0.36, 1] } },
+  exit: { opacity: 0, y: -10, scale: 0.97, transition: { duration: 0.28 } },
+};
+```
+
+## State Access
+
+Read shared data from the Zustand store. Use `useState` only for component-local UI state (modal open, animation phase, pressed state).
+
+```tsx
+import { useTripStore } from "@/lib/store";
+
+export default function SomePage() {
+  const activities = useTripStore((s) => s.currentTrip.activities);
+  const vote = useTripStore((s) => s.recordVote);
+}
+```
+
+## File Organization
+
+- Pages (routed) → `/src/pages/`
+- Reusable UI components → `/src/components/`
+- Sub-components (like `ActivityCardInner`) stay in the same file as their parent
+- Shared shadcn/radix primitives stay in `/src/app/components/ui/` — prefer using these for sheets, dialogs, and form inputs over building custom ones
+
+## Touch Targets
+
+Every interactive element must be at least 44px tall. Use `min-h-11` (44px) on buttons, links, and tappable cards. This is a mobile app — fat-finger-proof everything.
+
+## Bottom Sheets
+
+Use the existing `vaul` Drawer component (already installed, shadcn `Drawer` in `ui/drawer.tsx`) for bottom sheets like SalvageModal and CreateTripSheet. Configure with drag-to-dismiss.

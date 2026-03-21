@@ -1,0 +1,131 @@
+---
+description: Zustand store patterns, Elo algorithm, and API conventions
+globs: "**/lib/**"
+alwaysApply: false
+---
+
+# Store & API Patterns
+
+## Zustand Store (`lib/store.ts`)
+
+The store holds ALL shared app state. Component-local UI state (modal visibility, animation phase, pressed state) uses `useState`.
+
+### Store shape
+
+```ts
+interface TripStore {
+  trips: Trip[];
+  currentTripId: string | null;
+
+  // Computed helper (not stored, derived)
+  get currentTrip(): Trip | undefined;
+
+  // Actions
+  createTrip(destination: string, dates: { start: string; end: string }): string;
+  addActivities(tripId: string, activities: Activity[]): void;
+
+  // Voting
+  recordVote(tripId: string, winnerId: string, loserId: string): void;
+  getCurrentPair(tripId: string): [Activity, Activity] | null;
+  getComparisonCount(tripId: string): number;
+
+  // Rankings
+  generateGroupPriorities(tripId: string): void;
+
+  // Itinerary
+  setItinerary(tripId: string, stops: ItineraryStop[]): void;
+  setPreferences(tripId: string, prefs: TripPreferences): void;
+
+  // Execution
+  advanceStop(tripId: string): void;
+  skipStop(tripId: string): void;
+  replaceItinerary(tripId: string, newStops: ItineraryStop[]): void;
+  getActiveStop(tripId: string): ItineraryStop | undefined;
+  shouldTriggerSalvage(tripId: string): boolean;
+}
+```
+
+### Persistence
+
+Use `zustand/middleware` persist with `localStorage` for execution state so refreshing during the demo doesn't lose progress.
+
+## Elo Algorithm (`lib/ranking.ts`)
+
+- K-factor: 32
+- Starting score: 1000 for all activities
+- Swiss-system pairing: match activities with similar current Elo scores
+- Target: ~12-15 comparisons for ~15 activities
+- After all comparisons, normalize each user's Elo scores to 0-100 range
+
+### Group merge
+
+```
+compositeScore = average of normalized scores across all members
+```
+
+Sort descending for final priority list. For the demo, pre-compute 3 simulated users' rankings in seed data so group results work without multiple real users.
+
+### Salvage trigger
+
+Auto-prompt salvage mode when either:
+- 2+ stops have been skipped, OR
+- Current time is 30+ minutes behind the active stop's expected end time
+
+## API Helpers (`lib/api.ts`)
+
+No server-side route handlers — this is a Vite SPA. All LLM interaction goes through client-side helpers that always fall back to hardcoded responses.
+
+```ts
+export async function extractPlaces(url: string): Promise<Activity[]> {
+  try {
+    const res = await fetch("/api/extract", { method: "POST", ... });
+    return await res.json();
+  } catch {
+    return SEED_ACTIVITIES;
+  }
+}
+
+export async function generateItinerary(
+  activities: Activity[],
+  preferences: TripPreferences
+): Promise<ItineraryStop[]> {
+  try {
+    const res = await fetch("/api/generate", { method: "POST", ... });
+    return await res.json();
+  } catch {
+    return FALLBACK_ITINERARY;
+  }
+}
+
+export async function salvagePlan(
+  original: ItineraryStop[],
+  completed: string[],
+  skipped: string[],
+  reason: string
+): Promise<{ stops: ItineraryStop[]; message: string }> {
+  try {
+    const res = await fetch("/api/salvage", { method: "POST", ... });
+    return await res.json();
+  } catch {
+    return FALLBACK_SALVAGE;
+  }
+}
+```
+
+If adding a real LLM proxy later, configure in `vite.config.ts`:
+
+```ts
+export default defineConfig({
+  server: {
+    proxy: { "/api": "http://localhost:3001" }
+  }
+});
+```
+
+## Seed Data (`lib/seed-data.ts`)
+
+Pre-load 15 Tokyo activities with realistic coordinates, descriptions, and durations. Also include:
+- 3 simulated `UserRanking` objects (varying preference profiles)
+- Pre-computed `GroupPriority` array
+- A fallback `ItineraryStop[]` for Day 1
+- A fallback salvage response
