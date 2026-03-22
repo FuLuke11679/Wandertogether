@@ -317,9 +317,10 @@ interface HomeScreenProps {
   onOpenTrip: (tripId: string) => void;
   onOpenImport?: (tripId: string) => void;
   onCreateTrip?: (tripId: string) => void;
+  onOpenProfile?: () => void;
 }
 
-export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScreenProps) {
+export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip, onOpenProfile }: HomeScreenProps) {
   const [visible, setVisible]         = useState(false);
   const [heroPressed, setHeroPressed] = useState(false);
   const [createOpen, setCreateOpen]   = useState(false);
@@ -328,6 +329,18 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
   const currentTripId = useTripStore((s) => s.currentTripId);
   const setCurrentTrip = useTripStore((s) => s.setCurrentTrip);
   const deleteTrip = useTripStore((s) => s.deleteTrip);
+  const displayName = useTripStore((s) => s.userProfile.displayName);
+
+  const greetingFirst = useMemo(() => {
+    const t = displayName.trim();
+    if (!t) return "there";
+    return t.split(/\s+/)[0] ?? "there";
+  }, [displayName]);
+
+  const avatarInitial = useMemo(() => {
+    const ch = displayName.trim().charAt(0).toUpperCase();
+    return ch || "S";
+  }, [displayName]);
 
   const activeTrip = useMemo(() => {
     const direct = trips.find((t) => t.id === currentTripId);
@@ -452,7 +465,10 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
           </div>
 
           {/* User avatar */}
-          <div
+          <button
+            type="button"
+            onClick={() => onOpenProfile?.()}
+            aria-label="Open profile"
             style={{
               width: 36,
               height: 36,
@@ -462,8 +478,10 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              cursor: "pointer",
+              cursor: onOpenProfile ? "pointer" : "default",
               boxShadow: "0 2px 8px rgba(232,93,58,0.18)",
+              padding: 0,
+              WebkitTapHighlightColor: "transparent",
             }}
           >
             <span
@@ -475,9 +493,9 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
                 letterSpacing: "-0.2px",
               }}
             >
-              S
+              {avatarInitial}
             </span>
-          </div>
+          </button>
         </div>
 
         {/* ── GREETING ── */}
@@ -497,7 +515,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
               letterSpacing: "-0.4px",
             }}
           >
-            Hey Sarah 👋
+            Hey {greetingFirst} 👋
           </h1>
           <p
             style={{
@@ -1054,7 +1072,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
           { icon: <IconHome active />,    label: "Home",    active: true,  onClick: undefined },
           { icon: <IconCompass />,         label: "Explore", active: false, onClick: undefined },
           { icon: <IconImport />,          label: "Import",  active: false, onClick: openActiveImport },
-          { icon: <IconProfile />,         label: "Profile", active: false, onClick: undefined },
+          { icon: <IconProfile />,         label: "Profile", active: false, onClick: onOpenProfile },
         ].map((tab) => (
           <button
             key={tab.label}

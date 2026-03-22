@@ -8,6 +8,7 @@ import { PreferencesPage } from "../pages/PreferencesPage";
 import { BuildingPage } from "../pages/BuildingPage";
 import { PlanPage } from "../pages/PlanPage";
 import { LivePage } from "../pages/LivePage";
+import { ProfilePage } from "../pages/ProfilePage";
 
 export default function App() {
   const location = useLocation();
@@ -27,6 +28,7 @@ export default function App() {
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="/trip/:id/import" element={<ImportPage />} />
             <Route path="/trip/:id/vote" element={<VotePage />} />
             <Route path="/trip/:id/results" element={<ResultsPage />} />
