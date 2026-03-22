@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { CreateTripSheet } from "./CreateTripSheet";
 import { useTripStore } from "../../lib/store";
+import { SEED_TRIP } from "../../lib/seed-data";
 import type { Trip } from "../../lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -9,9 +10,39 @@ const SAGE   = "#2D5F4E";
 const BG     = "#FAFAF8";
 const DARK   = "#1A1A1A";
 
-const TOKYO_IMG     = "https://images.unsplash.com/photo-1770953176837-dec4a34236ae?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxUb2t5byUyMHNreWxpbmUlMjBuaWdodCUyMGR1c2slMjBjaXR5JTIwbGlnaHRzfGVufDF8fHx8MTc3NDAzNjc4Mnww&ixlib=rb-4.1.0&q=80&w=1080";
-const BARCELONA_IMG = "https://images.unsplash.com/photo-1662981187370-22445e0e85d2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxCYXJjZWxvbmElMjBhcmNoaXRlY3R1cmUlMjB3YXJtJTIwZ29sZGVuJTIwbGlnaHQlMjBjaXR5c2NhcGV8ZW58MXx8fHwxNzc0MDM2Nzg1fDA&ixlib=rb-4.1.0&q=80&w=1080";
-const SEOUL_IMG     = "https://images.unsplash.com/photo-1565102598088-c27307f4420c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxTZW91bCUyMGNpdHklMjBuaWdodCUyMGJva2VoJTIwbmVvbiUyMHN0cmVldHxlbnwxfHx8fDE3NzQwMzY3ODZ8MA&ixlib=rb-4.1.0&q=80&w=1080";
+const TOKYO_IMG =
+  "https://images.unsplash.com/photo-1770953176837-dec4a34236ae?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxUb2t5byUyMHNreWxpbmUlMjBuaWdodCUyMGR1c2slMjBjaXR5JTIwbGlnaHRzfGVufDF8fHx8MTc3NDAzNjc4Mnww&ixlib=rb-4.1.0&q=80&w=1080";
+const RIO_IMG =
+  "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080";
+const GENERIC_TRIP_IMG =
+  "https://images.unsplash.com/photo-1488646953014-85cb44e25828?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080";
+
+function coverImageForTrip(trip: Trip): string {
+  if (trip.coverImage) return trip.coverImage;
+  if (trip.id === SEED_TRIP.id) return TOKYO_IMG;
+  const d = trip.destination.toLowerCase();
+  if (d.includes("rio") || d.includes("brazil")) return RIO_IMG;
+  return GENERIC_TRIP_IMG;
+}
+
+function formatTripCardMeta(trip: Trip): string {
+  const start = new Date(trip.dates.start + "T12:00:00");
+  const end = new Date(trip.dates.end + "T12:00:00");
+  const range = `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+  const statusLabel =
+    trip.status === "draft"
+      ? "Draft"
+      : trip.status === "voting"
+        ? "Voting"
+        : trip.status === "planning"
+          ? "Planning"
+          : trip.status === "active"
+            ? "Active"
+            : trip.status === "completed"
+              ? "Completed"
+              : trip.status;
+  return `${statusLabel} · ${range}`;
+}
 
 // ─── Avatar colours keyed by initials ────────────────────────────────────────
 const AVATAR_PALETTES = [
@@ -137,26 +168,28 @@ function IconProfile() {
   );
 }
 
-// ─── Past trip card (horizontal scroll) ──────────────────────────────────────
+// ─── Trip card from store (Your Trips strip) ─────────────────────────────────
 
-function PastTripCard({
-  image,
-  city,
-  meta,
-  avatars,
+function StoreTripCard({
+  trip,
+  isActive,
+  onSelect,
   delay,
   visible,
 }: {
-  image: string;
-  city: string;
-  meta: string;
-  avatars: string[];
+  trip: Trip;
+  isActive: boolean;
+  onSelect: () => void;
   delay: number;
   visible: boolean;
 }) {
   const [pressed, setPressed] = useState(false);
+  const image = coverImageForTrip(trip);
+  const avatars = trip.members.map((m) => m.initials).slice(0, 4);
   return (
-    <div
+    <button
+      type="button"
+      onClick={onSelect}
       onMouseDown={() => setPressed(true)}
       onMouseUp={() => setPressed(false)}
       onMouseLeave={() => setPressed(false)}
@@ -173,17 +206,22 @@ function PastTripCard({
         transform: pressed ? "scale(0.97)" : "scale(1)",
         transition: `transform 0.14s ease, opacity 0.44s ease ${delay}s, box-shadow 0.14s ease`,
         opacity: visible ? 1 : 0,
-        boxShadow: pressed
-          ? "0 2px 10px rgba(0,0,0,0.10)"
-          : "0 4px 18px rgba(0,0,0,0.10)",
+        border: "none",
+        padding: 0,
+        display: "block",
+        textAlign: "left" as const,
+        boxShadow: isActive
+          ? `0 0 0 2px ${CORAL}, 0 4px 18px rgba(232,93,58,0.22)`
+          : pressed
+            ? "0 2px 10px rgba(0,0,0,0.10)"
+            : "0 4px 18px rgba(0,0,0,0.10)",
       }}
     >
       <img
         src={image}
-        alt={city}
+        alt={trip.destination}
         style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
       />
-      {/* Gradient */}
       <div
         style={{
           position: "absolute",
@@ -191,7 +229,6 @@ function PastTripCard({
           background: "linear-gradient(to bottom, rgba(0,0,0,0) 20%, rgba(0,0,0,0.72) 100%)",
         }}
       />
-      {/* Content */}
       <div
         style={{
           position: "absolute",
@@ -202,11 +239,9 @@ function PastTripCard({
           justifyContent: "space-between",
         }}
       >
-        {/* Top: avatar stack */}
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <AvatarStack initials={avatars} size={22} />
+          <AvatarStack initials={avatars.length ? avatars : ["S"]} size={22} />
         </div>
-        {/* Bottom: city + meta */}
         <div>
           <div
             style={{
@@ -218,7 +253,7 @@ function PastTripCard({
               letterSpacing: "-0.1px",
             }}
           >
-            {city}
+            {trip.destination}
           </div>
           <div
             style={{
@@ -229,11 +264,11 @@ function PastTripCard({
               letterSpacing: "0.01em",
             }}
           >
-            {meta}
+            {formatTripCardMeta(trip)}
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -250,8 +285,46 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
   const [heroPressed, setHeroPressed] = useState(false);
   const [createOpen, setCreateOpen]   = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const store = useTripStore();
-  const currentTrip = store.getCurrentTrip();
+  const trips = useTripStore((s) => s.trips);
+  const currentTripId = useTripStore((s) => s.currentTripId);
+  const setCurrentTrip = useTripStore((s) => s.setCurrentTrip);
+
+  const activeTrip = useMemo(() => {
+    const direct = trips.find((t) => t.id === currentTripId);
+    if (direct) return direct;
+    const seed = trips.find((t) => t.id === SEED_TRIP.id);
+    if (seed) return seed;
+    return trips[0] ?? null;
+  }, [trips, currentTripId]);
+
+  const tripsForList = useMemo(() => {
+    const seed = trips.find((t) => t.id === SEED_TRIP.id);
+    const rest = trips.filter((t) => t.id !== SEED_TRIP.id);
+    return seed ? [seed, ...rest] : [...trips];
+  }, [trips]);
+
+  useEffect(() => {
+    if (!trips.length) return;
+    const direct = trips.find((t) => t.id === currentTripId);
+    if (!direct) {
+      const seed = trips.find((t) => t.id === SEED_TRIP.id);
+      setCurrentTrip(seed?.id ?? trips[0].id);
+    }
+  }, [trips, currentTripId, setCurrentTrip]);
+
+  const openActivePlan = () => {
+    const id = activeTrip?.id;
+    if (!id) return;
+    setCurrentTrip(id);
+    onOpenTrip(id);
+  };
+
+  const openActiveImport = () => {
+    const id = activeTrip?.id;
+    if (!id) return;
+    setCurrentTrip(id);
+    onOpenImport?.(id);
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 60);
@@ -407,10 +480,10 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
         >
           <div
             onMouseDown={() => setHeroPressed(true)}
-            onMouseUp={() => { setHeroPressed(false); onOpenTrip(currentTrip?.id ?? "tokyo-2026"); }}
+            onMouseUp={() => { setHeroPressed(false); openActivePlan(); }}
             onMouseLeave={() => setHeroPressed(false)}
             onTouchStart={() => setHeroPressed(true)}
-            onTouchEnd={() => { setHeroPressed(false); onOpenTrip(currentTrip?.id ?? "tokyo-2026"); }}
+            onTouchEnd={() => { setHeroPressed(false); openActivePlan(); }}
             style={{
               height: 210,
               borderRadius: 18,
@@ -426,8 +499,8 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
           >
             {/* Background image */}
             <img
-              src={TOKYO_IMG}
-              alt="Tokyo"
+              src={activeTrip ? coverImageForTrip(activeTrip) : TOKYO_IMG}
+              alt={activeTrip?.destination ?? "Trip"}
               style={{
                 position: "absolute",
                 width: "100%",
@@ -529,7 +602,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
                     textShadow: "0 2px 16px rgba(0,0,0,0.4)",
                   }}
                 >
-                  {currentTrip?.destination ?? "Tokyo"} Adventure
+                  {activeTrip?.destination ?? "Your"} Adventure
                 </h2>
 
                 {/* Date range */}
@@ -551,13 +624,15 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
                     <path d="M1 5h9" stroke="rgba(255,255,255,0.6)" strokeWidth="1.1" />
                     <path d="M3.5 1v2M7.5 1v2" stroke="rgba(255,255,255,0.6)" strokeWidth="1.1" strokeLinecap="round" />
                   </svg>
-                  {currentTrip ? `${new Date(currentTrip.dates.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(currentTrip.dates.end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${new Date(currentTrip.dates.start).getFullYear()}` : "Mar 22 – 26, 2026"}
+                  {activeTrip
+                    ? `${new Date(activeTrip.dates.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(activeTrip.dates.end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${new Date(activeTrip.dates.start).getFullYear()}`
+                    : "Pick dates when you create a trip"}
                 </p>
 
                 {/* Bottom row: avatars + vote pill */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <AvatarStack initials={currentTrip?.members.map(m => m.initials) ?? ["S", "M", "J", "A"]} size={28} />
+                    <AvatarStack initials={activeTrip?.members.map(m => m.initials) ?? ["S"]} size={28} />
                     <span
                       style={{
                         fontFamily: "'Inter', sans-serif",
@@ -566,11 +641,18 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
                         fontWeight: 400,
                       }}
                     >
-                      {currentTrip?.members.length ?? 4} travellers
+                      {activeTrip?.members.length ?? 0} travellers
                     </span>
                   </div>
 
-                  <StatusPill label={currentTrip ? `${currentTrip.rankings.length} of ${currentTrip.members.length} voted` : "3 of 4 voted"} variant="white" />
+                  <StatusPill
+                    label={
+                      activeTrip
+                        ? `${activeTrip.rankings.length} of ${activeTrip.members.length} voted`
+                        : "No trip yet"
+                    }
+                    variant="white"
+                  />
                 </div>
               </div>
             </div>
@@ -669,22 +751,16 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
               scrollbarWidth: "none",
             } as React.CSSProperties}
           >
-            <PastTripCard
-              image={BARCELONA_IMG}
-              city="Barcelona"
-              meta="Jan 2026 · Completed"
-              avatars={["L", "R", "K"]}
-              delay={0.18}
-              visible={visible}
-            />
-            <PastTripCard
-              image={SEOUL_IMG}
-              city="Seoul"
-              meta="Draft · 2 places saved"
-              avatars={["Y"]}
-              delay={0.26}
-              visible={visible}
-            />
+            {tripsForList.map((trip, i) => (
+              <StoreTripCard
+                key={trip.id}
+                trip={trip}
+                isActive={trip.id === currentTripId}
+                onSelect={() => setCurrentTrip(trip.id)}
+                delay={0.18 + i * 0.07}
+                visible={visible}
+              />
+            ))}
 
             {/* "More" ghost card */}
             <div
@@ -936,7 +1012,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
         {[
           { icon: <IconHome active />,    label: "Home",    active: true,  onClick: undefined },
           { icon: <IconCompass />,         label: "Explore", active: false, onClick: undefined },
-          { icon: <IconImport />,          label: "Import",  active: false, onClick: () => onOpenImport?.(currentTrip?.id ?? "tokyo-2026") },
+          { icon: <IconImport />,          label: "Import",  active: false, onClick: openActiveImport },
           { icon: <IconProfile />,         label: "Profile", active: false, onClick: undefined },
         ].map((tab) => (
           <button

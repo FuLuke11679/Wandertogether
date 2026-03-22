@@ -514,6 +514,32 @@ export const useTripStore = create<TripStore>()(
         currentTripId: state.currentTripId,
         execution: state.execution,
       }),
+      merge: (persistedState, currentState) => {
+        const p = persistedState as Partial<TripStore> | undefined;
+        const c = currentState as TripStore;
+        if (!p) return c;
+        const merged: TripStore = {
+          ...c,
+          ...p,
+          trips: p.trips ?? c.trips,
+          currentTripId: p.currentTripId ?? c.currentTripId,
+          execution: p.execution ?? c.execution,
+        };
+        // Demo seed trip must always exist (persisted state can drop it or corrupt ids)
+        if (!merged.trips.some((t) => t.id === SEED_TRIP.id)) {
+          merged.trips = [SEED_TRIP, ...merged.trips];
+        }
+        if (merged.trips.length > 0) {
+          const ok =
+            merged.currentTripId &&
+            merged.trips.some((t) => t.id === merged.currentTripId);
+          if (!ok) {
+            const seed = merged.trips.find((t) => t.id === SEED_TRIP.id);
+            merged.currentTripId = seed?.id ?? merged.trips[0].id;
+          }
+        }
+        return merged;
+      },
     },
   ),
 );

@@ -1,5 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useTripStore } from "../../lib/store";
+import {
+  filterCitySuggestions,
+  flagForDestination,
+  type CitySuggestion,
+} from "../../lib/city-suggestions";
+import { DatePickerSheet, formatDateShort } from "./DatePickerSheet";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const CORAL = "#E85D3A";
@@ -57,6 +64,20 @@ function IconUser() {
 }
 
 // ─── Section label ────────────────────────────────────────────────────────────
+function defaultTripDates(): { start: Date; end: Date } {
+  const start = new Date();
+  start.setDate(start.getDate() + 14);
+  start.setHours(12, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 4);
+  return { start, end };
+}
+
+function toISODate(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -82,21 +103,66 @@ interface CreateTripSheetProps {
 }
 
 export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
-  const [sheetIn,   setSheetIn]   = useState(false);
-  const [copied,    setCopied]    = useState(false);
-  const [emailVal,  setEmailVal]  = useState("");
-  const [destVal,   setDestVal]   = useState("Tokyo, Japan");
+  const [sheetIn, setSheetIn] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [emailVal, setEmailVal] = useState("");
+  const [destVal, setDestVal] = useState("Tokyo, Japan");
+  const [destFocused, setDestFocused] = useState(false);
   const [createPressed, setCreatePressed] = useState(false);
-  const [copyPressed,   setCopyPressed]   = useState(false);
-  const [members,  setMembers]   = useState(MEMBERS);
+  const [copyPressed, setCopyPressed] = useState(false);
+  const [members, setMembers] = useState(MEMBERS);
+  const defaults = useMemo(() => defaultTripDates(), []);
+  const [startDate, setStartDate] = useState<Date | null>(defaults.start);
+  const [endDate, setEndDate] = useState<Date | null>(defaults.end);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [dateCardHover, setDateCardHover] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const destMeasureRef = useRef<HTMLDivElement>(null);
+  const [cityDropPos, setCityDropPos] = useState<{
+    left: number;
+    top: number;
+    width: number;
+  } | null>(null);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const store = useTripStore();
+
+  const citySuggestions = useMemo(
+    () => filterCitySuggestions(destVal, 8),
+    [destVal],
+  );
+  const showCityList =
+    destFocused && destVal.trim().length > 0 && citySuggestions.length > 0;
 
   // Slide in on mount
   useEffect(() => {
     const t = setTimeout(() => setSheetIn(true), 30);
     return () => clearTimeout(t);
   }, []);
+
+  const updateCityDropdownPosition = () => {
+    const el = destMeasureRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setCityDropPos({ left: r.left, top: r.bottom + 6, width: r.width });
+  };
+
+  useLayoutEffect(() => {
+    if (!showCityList) {
+      setCityDropPos(null);
+      return;
+    }
+    updateCityDropdownPosition();
+    const onScrollOrResize = () => updateCityDropdownPosition();
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    const ro = new ResizeObserver(onScrollOrResize);
+    if (destMeasureRef.current) ro.observe(destMeasureRef.current);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+      ro.disconnect();
+    };
+  }, [showCityList, citySuggestions]);
 
   const handleClose = () => {
     setSheetIn(false);
@@ -109,10 +175,17 @@ export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
   };
 
   const handleCreate = () => {
+    if (!startDate || !endDate) return;
     setCreatePressed(true);
-    const startDate = "2026-03-22";
-    const endDate = "2026-03-26";
-    const tripId = store.createTrip(destVal.split(",")[0].trim(), { start: startDate, end: endDate });
+    let start = toISODate(startDate);
+    let end = toISODate(endDate);
+    if (end < start) {
+      end = start;
+    }
+    const tripId = store.createTrip(destVal.split(",")[0].trim(), {
+      start,
+      end,
+    });
     members.filter(m => !m.isYou).forEach((m) => {
       const trips = useTripStore.getState().trips;
       const trip = trips.find(t => t.id === tripId);
@@ -140,7 +213,22 @@ export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
     inputRef.current?.focus();
   };
 
-  const sheetH = Math.round(844 * 0.72); // ~72% ≈ 607px
+  const sheetH = Math.round(844 * 0.78);
+
+  const pickCity = (c: CitySuggestion) => {
+    setDestVal(c.display);
+    setDestFocused(false);
+    if (blurTimer.current) clearTimeout(blurTimer.current);
+  };
+
+  const handleDestBlur = () => {
+    blurTimer.current = setTimeout(() => setDestFocused(false), 200);
+  };
+
+  const handleDestFocus = () => {
+    if (blurTimer.current) clearTimeout(blurTimer.current);
+    setDestFocused(true);
+  };
 
   // Stagger helper
   const stagger = (i: number): React.CSSProperties => ({
@@ -270,8 +358,7 @@ export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
           {/* ── DESTINATION ── */}
           <div style={{ padding: "0 22px 20px", ...stagger(1) }}>
             <SectionLabel>Destination</SectionLabel>
-            <div style={{ position: "relative" }}>
-              {/* Globe icon */}
+            <div ref={destMeasureRef} style={{ position: "relative" }}>
               <div
                 style={{
                   position: "absolute",
@@ -281,6 +368,7 @@ export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
                   pointerEvents: "none",
                   display: "flex",
                   alignItems: "center",
+                  zIndex: 1,
                 }}
               >
                 <IconGlobe />
@@ -289,25 +377,31 @@ export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
               <input
                 className="ct-input"
                 value={destVal}
-                onChange={e => setDestVal(e.target.value)}
+                onChange={(e) => setDestVal(e.target.value)}
+                onFocus={handleDestFocus}
+                onBlur={handleDestBlur}
                 placeholder="Where are you going?"
+                autoComplete="off"
+                aria-autocomplete="list"
+                aria-expanded={showCityList}
                 style={{
                   width: "100%",
                   boxSizing: "border-box" as const,
                   padding: "13px 44px 13px 42px",
                   borderRadius: 14,
-                  border: "1.5px solid #E8E4DE",
+                  border: `1.5px solid ${showCityList ? CORAL : "#E8E4DE"}`,
                   background: "#FFFFFF",
                   fontFamily: "'Inter', sans-serif",
                   fontSize: 15,
                   fontWeight: destVal ? 500 : 400,
                   color: DARK,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                  boxShadow: showCityList
+                    ? `0 2px 8px rgba(0,0,0,0.04), 0 0 0 3px ${CORAL}18`
+                    : "0 2px 8px rgba(0,0,0,0.04)",
                   transition: "border-color 0.18s ease, box-shadow 0.18s ease",
                 }}
               />
 
-              {/* Flag emoji */}
               {destVal && (
                 <div
                   style={{
@@ -320,73 +414,219 @@ export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
                     pointerEvents: "none",
                   }}
                 >
-                  🇯🇵
+                  {flagForDestination(destVal)}
                 </div>
               )}
+
             </div>
           </div>
 
-          {/* ── DATE RANGE ── */}
+          {showCityList &&
+            cityDropPos &&
+            createPortal(
+              <div
+                role="listbox"
+                style={{
+                  position: "fixed",
+                  left: cityDropPos.left,
+                  top: cityDropPos.top,
+                  width: cityDropPos.width,
+                  zIndex: 100000,
+                  background: "#FFFFFF",
+                  border: "1.5px solid #E8E4DE",
+                  borderRadius: 14,
+                  boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
+                  maxHeight: 240,
+                  overflowY: "auto",
+                }}
+              >
+                {citySuggestions.map((c) => (
+                  <button
+                    key={c.display}
+                    type="button"
+                    role="option"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      pickCity(c);
+                    }}
+                    style={{
+                      width: "100%",
+                      textAlign: "left" as const,
+                      padding: "11px 14px",
+                      border: "none",
+                      borderBottom: "1px solid #F5F2EE",
+                      background: "transparent",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      fontFamily: "'Inter', sans-serif",
+                      fontSize: 14,
+                      color: DARK,
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>
+                      {flagForDestination(c.display)}
+                    </span>
+                    <span style={{ fontWeight: 500 }}>{c.display}</span>
+                  </button>
+                ))}
+              </div>,
+              document.body,
+            )}
+
+          {/* ── DATE RANGE (single card → calendar sheet) ── */}
           <div style={{ padding: "0 22px 20px", ...stagger(2) }}>
             <SectionLabel>Dates</SectionLabel>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {[
-                { label: "Start date", value: "Mar 22" },
-                { label: "End date",   value: "Mar 26" },
-              ].map((d, i) => (
-                <div
-                  key={i}
+            <p
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 11.5,
+                color: "#A09888",
+                margin: "0 0 10px",
+                lineHeight: 1.4,
+              }}
+            >
+              Tap to choose your trip start and end. Tap a selected day again to
+              adjust or clear the range.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (blurTimer.current) clearTimeout(blurTimer.current);
+                setDestFocused(false);
+                setDatePickerOpen(true);
+              }}
+              onMouseEnter={() => setDateCardHover(true)}
+              onMouseLeave={() => setDateCardHover(false)}
+              style={{
+                width: "100%",
+                textAlign: "left" as const,
+                cursor: "pointer",
+                display: "block",
+                background: "#FFFFFF",
+                border: `1.5px solid ${dateCardHover ? `${CORAL}60` : "#E8E4DE"}`,
+                borderRadius: 14,
+                padding: "14px 16px 16px",
+                boxShadow: dateCardHover
+                  ? "0 4px 16px rgba(0,0,0,0.08)"
+                  : "0 2px 8px rgba(0,0,0,0.04)",
+                transform: dateCardHover ? "translateY(-2px)" : "translateY(0)",
+                transition:
+                  "border-color 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
+                <IconCalendar />
+                <span
                   style={{
-                    background: "#FFFFFF",
-                    border: "1.5px solid #E8E4DE",
-                    borderRadius: 14,
-                    padding: "11px 14px",
-                    cursor: "pointer",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                    transition: "border-color 0.18s ease",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 5,
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    color: "#B0A99F",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase" as const,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <IconCalendar />
-                    <span
-                      style={{
-                        fontFamily: "'Inter', sans-serif",
-                        fontSize: 10.5,
-                        fontWeight: 500,
-                        color: "#B0A99F",
-                        letterSpacing: "0.04em",
-                        textTransform: "uppercase" as const,
-                      }}
-                    >
-                      {d.label}
-                    </span>
-                  </div>
-                  <span
-                    style={{
-                      fontFamily: "'DM Serif Display', serif",
-                      fontSize: 20,
-                      color: DARK,
-                      letterSpacing: "-0.2px",
-                      lineHeight: 1,
-                    }}
-                  >
-                    {d.value}
-                  </span>
-                  <span
+                  Trip duration
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
                     style={{
                       fontFamily: "'Inter', sans-serif",
-                      fontSize: 11,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: "0.08em",
                       color: "#B0A99F",
+                      marginBottom: 4,
                     }}
                   >
-                    2026
-                  </span>
+                    FROM
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "'DM Serif Display', serif",
+                      fontSize: 22,
+                      color: startDate ? DARK : "#C5BEB6",
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    {startDate ? formatDateShort(startDate) : "—"}
+                  </div>
                 </div>
-              ))}
-            </div>
+                <svg
+                  width="28"
+                  height="16"
+                  viewBox="0 0 28 16"
+                  fill="none"
+                  aria-hidden
+                  style={{ flexShrink: 0 }}
+                >
+                  <path
+                    d="M4 8h20M18 4l4 4-4 4"
+                    stroke={CORAL}
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <div style={{ flex: 1, minWidth: 0, textAlign: "right" as const }}>
+                  <div
+                    style={{
+                      fontFamily: "'Inter', sans-serif",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: "0.08em",
+                      color: "#B0A99F",
+                      marginBottom: 4,
+                    }}
+                  >
+                    TO
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "'DM Serif Display', serif",
+                      fontSize: 22,
+                      color: endDate ? DARK : "#C5BEB6",
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    {endDate ? formatDateShort(endDate) : "—"}
+                  </div>
+                </div>
+              </div>
+              {startDate && endDate && (
+                <div
+                  style={{
+                    textAlign: "center",
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: 12,
+                    color: "#9A9080",
+                    marginTop: 12,
+                  }}
+                >
+                  {startDate.getFullYear() === endDate.getFullYear()
+                    ? String(startDate.getFullYear())
+                    : `${startDate.getFullYear()} → ${endDate.getFullYear()}`}
+                </div>
+              )}
+            </button>
           </div>
 
           {/* ── INVITE MEMBERS ── */}
@@ -726,6 +966,18 @@ export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
           </button>
         </div>
       </div>
+
+      {datePickerOpen && (
+        <DatePickerSheet
+          initialStart={startDate}
+          initialEnd={endDate}
+          onClose={() => setDatePickerOpen(false)}
+          onConfirm={(start, end) => {
+            setStartDate(start);
+            setEndDate(end);
+          }}
+        />
+      )}
     </>
   );
 }

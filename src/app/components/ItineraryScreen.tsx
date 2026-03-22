@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTripStore } from "../../lib/store";
+import { SEED_TRIP } from "../../lib/seed-data";
 
 const CORAL = "#E85D3A";
 const BG = "#FAFAF8";
@@ -246,6 +247,46 @@ function TokyoMap() {
   );
 }
 
+function TripMapPlaceholder({ destination }: { destination: string }) {
+  return (
+    <div
+      style={{
+        height: 270,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(165deg, #E8E4DE 0%, #FAFAF8 55%, #EDE9E4 100%)",
+      }}
+    >
+      <div style={{ fontSize: 28 }}>📍</div>
+      <p
+        style={{
+          fontFamily: "'DM Serif Display', serif",
+          fontSize: 18,
+          color: DARK,
+          margin: "12px 0 4px",
+        }}
+      >
+        {destination}
+      </p>
+      <p
+        style={{
+          fontFamily: "'Inter', sans-serif",
+          fontSize: 12,
+          color: "#9A9080",
+          margin: 0,
+          textAlign: "center",
+          padding: "0 28px",
+          lineHeight: 1.45,
+        }}
+      >
+        Build your itinerary to see stops on the map
+      </p>
+    </div>
+  );
+}
+
 // ─── Timeline Card ────────────────────────────────────────────────────────────
 
 function StopCard({ stop, index, visible }: { stop: Stop; index: number; visible: boolean }) {
@@ -453,7 +494,10 @@ export function ItineraryScreen({ onBack, onStartDay, tripId }: ItineraryScreenP
       : undefined,
   }));
 
-  const displayStops = storeStops.length > 0 ? storeStops : STOPS;
+  const useSeedTokyoDemo =
+    Boolean(trip && trip.id === SEED_TRIP.id && storeStops.length === 0);
+  const displayStops =
+    storeStops.length > 0 ? storeStops : useSeedTokyoDemo ? STOPS : [];
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 100);
@@ -735,104 +779,127 @@ export function ItineraryScreen({ onBack, onStartDay, tripId }: ItineraryScreenP
               color: "#B0A99F",
             }}
           >
-            {displayStops.length} stops · {trip?.destination ?? "Tokyo"}
+            {displayStops.length} stops · {trip?.destination ?? "Trip"}
           </span>
         </div>
 
         {/* ── VERTICAL TIMELINE ── */}
-        <div style={{ padding: "0 20px 0 20px", position: "relative" }}>
-          {/* Continuous vertical line */}
-          <div
-            style={{
-              position: "absolute",
-              left: 28,           // 20px outer padding + 8px to center
-              top: 8,
-              bottom: 60,
-              width: 1.5,
-              background: "linear-gradient(to bottom, #E2DDD8 0%, #EAE6E0 100%)",
-              zIndex: 0,
-              opacity: visible ? 1 : 0,
-              transition: "opacity 0.5s ease 0.2s",
-            }}
-          />
+        {displayStops.length === 0 ? (
+          <div style={{ padding: "28px 24px 48px", textAlign: "center" }}>
+            <p
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 14,
+                color: DARK,
+                margin: "0 0 8px",
+                fontWeight: 500,
+              }}
+            >
+              No stops for this day yet
+            </p>
+            <p
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 12.5,
+                color: "#9A9080",
+                margin: 0,
+                lineHeight: 1.5,
+              }}
+            >
+              Import places, run voting, then build your plan from preferences — your
+              itinerary will show here.
+            </p>
+          </div>
+        ) : (
+          <div style={{ padding: "0 20px 0 20px", position: "relative" }}>
+            <div
+              style={{
+                position: "absolute",
+                left: 28,
+                top: 8,
+                bottom: 60,
+                width: 1.5,
+                background: "linear-gradient(to bottom, #E2DDD8 0%, #EAE6E0 100%)",
+                zIndex: 0,
+                opacity: visible ? 1 : 0,
+                transition: "opacity 0.5s ease 0.2s",
+              }}
+            />
 
-          {displayStops.map((stop, index) => (
-            <div key={stop.id} style={{ display: "flex", gap: 0, alignItems: "flex-start" }}>
-              {/* Timeline node column */}
-              <div
-                style={{
-                  width: 16,
-                  flexShrink: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  paddingTop: 14,
-                  zIndex: 1,
-                  opacity: visible ? 1 : 0,
-                  transition: `opacity 0.4s ease ${index * 0.1 + 0.1}s`,
-                }}
-              >
-                {/* Circle node */}
+            {displayStops.map((stop, index) => (
+              <div key={stop.id} style={{ display: "flex", gap: 0, alignItems: "flex-start" }}>
                 <div
                   style={{
-                    width: stop.id === 1 ? 14 : 10,
-                    height: stop.id === 1 ? 14 : 10,
-                    borderRadius: "50%",
-                    background: stop.id === 1 ? CORAL : "#FFFFFF",
-                    border: stop.id === 1 ? `3px solid ${CORAL}` : "2px solid #C5BEB6",
-                    boxShadow: stop.id === 1
-                      ? `0 0 0 3px rgba(232,93,58,0.18)`
-                      : "none",
+                    width: 16,
                     flexShrink: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    paddingTop: 14,
+                    zIndex: 1,
+                    opacity: visible ? 1 : 0,
+                    transition: `opacity 0.4s ease ${index * 0.1 + 0.1}s`,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: stop.id === 1 ? 14 : 10,
+                      height: stop.id === 1 ? 14 : 10,
+                      borderRadius: "50%",
+                      background: stop.id === 1 ? CORAL : "#FFFFFF",
+                      border: stop.id === 1 ? `3px solid ${CORAL}` : "2px solid #C5BEB6",
+                      boxShadow: stop.id === 1
+                        ? `0 0 0 3px rgba(232,93,58,0.18)`
+                        : "none",
+                      flexShrink: 0,
+                      zIndex: 2,
+                    }}
+                  />
+                </div>
+
+                <div style={{ flex: 1, paddingBottom: 4 }}>
+                  <StopCard stop={stop} index={index} visible={visible} />
+                </div>
+              </div>
+            ))}
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0,
+                paddingTop: 2,
+                opacity: visible ? 1 : 0,
+                transition: "opacity 0.4s ease 0.55s",
+              }}
+            >
+              <div style={{ width: 16, display: "flex", justifyContent: "center" }}>
+                <div
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#EAE6E0",
+                    border: "1.5px solid #D5D1CC",
                     zIndex: 2,
                   }}
                 />
               </div>
-
-              {/* Card + transit container */}
-              <div style={{ flex: 1, paddingBottom: 4 }}>
-                <StopCard stop={stop} index={index} visible={visible} />
+              <div style={{ marginLeft: 12 }}>
+                <span
+                  style={{
+                    fontFamily: "'Playfair Display', serif",
+                    fontStyle: "italic",
+                    fontSize: 12,
+                    color: "#C5BEB6",
+                  }}
+                >
+                  End of day — enjoy the evening ✦
+                </span>
               </div>
             </div>
-          ))}
-
-          {/* End node */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 0,
-              paddingTop: 2,
-              opacity: visible ? 1 : 0,
-              transition: "opacity 0.4s ease 0.55s",
-            }}
-          >
-            <div style={{ width: 16, display: "flex", justifyContent: "center" }}>
-              <div
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: "#EAE6E0",
-                  border: "1.5px solid #D5D1CC",
-                  zIndex: 2,
-                }}
-              />
-            </div>
-            <div style={{ marginLeft: 12 }}>
-              <span
-                style={{
-                  fontFamily: "'Playfair Display', serif",
-                  fontStyle: "italic",
-                  fontSize: 12,
-                  color: "#C5BEB6",
-                }}
-              >
-                End of day — enjoy the evening ✦
-              </span>
-            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ── STICKY BOTTOM BUTTON ── */}
