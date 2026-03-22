@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 import { loadEnv } from "vite";
-import { fetchTikTokTranscriptV1 } from "./src/lib/scrapecreators-v1";
+import { fetchTikTokTranscriptScrapeCreators } from "./src/lib/scrapecreators-tiktok-chain";
 
 function trimApiKey(raw: string | undefined): string {
   if (!raw) return "";
@@ -43,7 +43,10 @@ function sendJson(
   res.end(JSON.stringify(body));
 }
 
-function createMiddleware(getApiKey: () => string): Connect.NextHandleFunction {
+function createMiddleware(
+  getApiKey: () => string,
+  getRegion: () => string,
+): Connect.NextHandleFunction {
   return async (req, res, next) => {
     const pathOnly = req.url?.split("?")[0] ?? "";
     if (pathOnly !== "/api/tiktok/transcript" || req.method !== "POST") {
@@ -117,12 +120,13 @@ function createMiddleware(getApiKey: () => string): Connect.NextHandleFunction {
     const t = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const result = await fetchTikTokTranscriptV1(
+      const result = await fetchTikTokTranscriptScrapeCreators(
         apiKey,
         {
           url,
           language,
           useAiAsFallback,
+          region: getRegion(),
         },
         controller.signal,
       );
@@ -172,6 +176,7 @@ function createMiddleware(getApiKey: () => string): Connect.NextHandleFunction {
 
 export function tiktokTranscriptApiPlugin(): Plugin {
   let getApiKey: () => string = () => "";
+  let getRegion: () => string = () => "US";
 
   return {
     name: "tiktok-transcript-api",
@@ -179,12 +184,14 @@ export function tiktokTranscriptApiPlugin(): Plugin {
       const env = loadEnv(config.mode, process.cwd(), "");
       const key = trimApiKey(env.SCRAPECREATORS_API_KEY);
       getApiKey = () => key;
+      const r = env.SCRAPECREATORS_REGION?.trim() || "US";
+      getRegion = () => r.toUpperCase();
     },
     configureServer(server) {
-      server.middlewares.use(createMiddleware(() => getApiKey()));
+      server.middlewares.use(createMiddleware(() => getApiKey(), () => getRegion()));
     },
     configurePreviewServer(server) {
-      server.middlewares.use(createMiddleware(() => getApiKey()));
+      server.middlewares.use(createMiddleware(() => getApiKey(), () => getRegion()));
     },
   };
 }

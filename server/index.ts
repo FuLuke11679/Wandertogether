@@ -6,7 +6,7 @@ import {
   GENERATE_ITINERARY_SYSTEM,
   ADAPT_TRIP_SYSTEM,
 } from "./prompts";
-import { fetchTikTokTranscriptV1 } from "../src/lib/scrapecreators-v1";
+import { fetchTikTokTranscriptScrapeCreators } from "../src/lib/scrapecreators-tiktok-chain";
 import { isValidMapCoordinate } from "../src/lib/geo";
 import {
   enrichItineraryTravelTimes,
@@ -124,10 +124,13 @@ app.post("/api/tiktok/transcript", async (req, res) => {
   }
 
   try {
-    const result = await fetchTikTokTranscriptV1(apiKey, {
+    const region =
+      (process.env.SCRAPECREATORS_REGION?.trim() || "US").toUpperCase();
+    const result = await fetchTikTokTranscriptScrapeCreators(apiKey, {
       url: url.trim(),
       language,
       useAiAsFallback: use_ai_as_fallback,
+      region,
     });
 
     if (!result.ok) {

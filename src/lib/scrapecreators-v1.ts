@@ -21,7 +21,8 @@ export type V1Success = {
   transcriptPlain: string;
 };
 
-function extractProviderMessage(body: unknown): string | undefined {
+/** Shared with v2 / chain for consistent error text from ScrapeCreators JSON bodies. */
+export function extractProviderMessage(body: unknown): string | undefined {
   if (body === null || body === undefined) return undefined;
   if (typeof body === "string") return body;
   if (typeof body !== "object") return undefined;
