@@ -4,6 +4,7 @@ import type {
   SalvageResult,
   SalvageReason,
 } from "../types";
+import { sanitizeDayStops } from "../itinerary-sanitize-times";
 import { post } from "./client";
 
 type AdaptApiStop = {
@@ -23,7 +24,7 @@ function hydrateStops(
   apiStops: AdaptApiStop[],
   activityMap: Map<string, Activity>,
 ): ItineraryStop[] {
-  return apiStops
+  const raw = apiStops
     .filter((s) => activityMap.has(s.activityId))
     .map((s) => ({
       activity: activityMap.get(s.activityId)!,
@@ -33,6 +34,7 @@ function hydrateStops(
       priority: s.priority,
       status: "upcoming" as const,
     }));
+  return sanitizeDayStops(raw);
 }
 
 // ── Fallback: rebuild locally by dropping skipped + recomputing times ────────
@@ -108,6 +110,7 @@ export async function adaptTrip(
   allActivities: Activity[],
   reason?: SalvageReason,
   destination?: string,
+  detail?: string,
 ): Promise<{ result: SalvageResult; fromLLM: boolean }> {
   const actMap = new Map(allActivities.map((a) => [a.id, a]));
   const currentTime = new Date().toTimeString().slice(0, 5);
@@ -137,6 +140,7 @@ export async function adaptTrip(
       skippedIds,
       currentTime,
       reason,
+      detail,
       allActivities: apiActivities,
       destination: destination ?? "Tokyo",
     });

@@ -176,12 +176,16 @@ function StoreTripCard({
   onSelect,
   delay,
   visible,
+  onClick,
+  onDelete,
 }: {
   trip: Trip;
   isActive: boolean;
   onSelect: () => void;
   delay: number;
   visible: boolean;
+  onClick?: () => void;
+  onDelete?: () => void;
 }) {
   const [pressed, setPressed] = useState(false);
   const image = coverImageForTrip(trip);
@@ -191,10 +195,10 @@ function StoreTripCard({
       type="button"
       onClick={onSelect}
       onMouseDown={() => setPressed(true)}
-      onMouseUp={() => setPressed(false)}
+      onMouseUp={() => { setPressed(false); onClick?.(); }}
       onMouseLeave={() => setPressed(false)}
       onTouchStart={() => setPressed(true)}
-      onTouchEnd={() => setPressed(false)}
+      onTouchEnd={() => { setPressed(false); onClick?.(); }}
       style={{
         width: 160,
         height: 120,
@@ -229,6 +233,41 @@ function StoreTripCard({
           background: "linear-gradient(to bottom, rgba(0,0,0,0) 20%, rgba(0,0,0,0.72) 100%)",
         }}
       />
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            top: 6,
+            left: 6,
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            background: "rgba(0,0,0,0.45)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            padding: 0,
+            zIndex: 5,
+            transition: "background 0.15s ease",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(200,60,40,0.7)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.45)"; }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M2 2l6 6M8 2l-6 6" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
       <div
         style={{
           position: "absolute",
@@ -288,6 +327,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
   const trips = useTripStore((s) => s.trips);
   const currentTripId = useTripStore((s) => s.currentTripId);
   const setCurrentTrip = useTripStore((s) => s.setCurrentTrip);
+  const deleteTrip = useTripStore((s) => s.deleteTrip);
 
   const activeTrip = useMemo(() => {
     const direct = trips.find((t) => t.id === currentTripId);
@@ -732,7 +772,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
           </button>
         </div>
 
-        {/* ── PAST TRIPS HORIZONTAL SCROLL ── */}
+        {/* ── TRIPS HORIZONTAL SCROLL ── */}
         <div
           style={{
             paddingLeft: 22,
@@ -759,6 +799,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
                 onSelect={() => setCurrentTrip(trip.id)}
                 delay={0.18 + i * 0.07}
                 visible={visible}
+                onDelete={() => deleteTrip(trip.id)}
               />
             ))}
 

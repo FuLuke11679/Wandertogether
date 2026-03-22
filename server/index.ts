@@ -233,6 +233,7 @@ app.post("/api/adapt-trip", async (req, res) => {
       location: { lat: number; lng: number; neighborhood: string };
     }>;
     destination?: string;
+    detail?: string;
   };
 
   if (!currentItinerary?.length) {
@@ -247,10 +248,12 @@ app.post("/api/adapt-trip", async (req, res) => {
   }
 
   try {
+    const { detail } = req.body as { detail?: string };
     const userContent = `
 Destination: ${destination ?? "Tokyo"}
 Current time: ${currentTime ?? new Date().toTimeString().slice(0, 5)}
 Reason for adaptation: ${reason ?? "Plans changed"}
+${detail ? `User's situation: ${detail}` : ""}
 
 Completed stops: ${JSON.stringify(completedIds)}
 Skipped stops: ${JSON.stringify(skippedIds)}

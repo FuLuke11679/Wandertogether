@@ -1,4 +1,5 @@
 import type { Activity, ActivityCategory } from "./types";
+import { clampExtractedEstimatedDuration } from "./clamp-extracted-duration";
 import type { ExtractedPlace } from "./extracted-place";
 
 const CAT_MAP: Record<string, ActivityCategory> = {
@@ -25,7 +26,9 @@ export function extractedPlacesToActivities(
 ): Activity[] {
   const baseLat = 35.6762;
   const baseLng = 139.6503;
-  return places.map((p, i) => ({
+  return places.map((p, i) => {
+    const category = CAT_MAP[p.category] ?? "culture";
+    return {
     id: `import-${Date.now()}-${i}-${p.name.slice(0, 12).replace(/\s+/g, "-")}`,
     name: p.name,
     description: "Imported from TikTok transcript",
@@ -34,9 +37,13 @@ export function extractedPlacesToActivities(
       lng: baseLng + i * 0.015,
       neighborhood: neighborhoodFallback,
     },
-    category: CAT_MAP[p.category] ?? "culture",
-    estimatedDuration: parseDurationMin(p.duration),
+    category,
+    estimatedDuration: clampExtractedEstimatedDuration(
+      parseDurationMin(p.duration),
+      category,
+    ),
     emoji: p.emoji,
     source: "tiktok",
-  }));
+  };
+  });
 }

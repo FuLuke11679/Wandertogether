@@ -253,6 +253,18 @@ export function PlaceSelectionSheet({
               </span>
             </div>
           </div>
+          <p
+            style={{
+              fontFamily: "'Inter', sans-serif",
+              fontSize: 11,
+              color: "#A09888",
+              margin: "10px 0 0",
+              lineHeight: 1.45,
+              fontStyle: "italic",
+            }}
+          >
+            Times are planning estimates. Creators often say &ldquo;all day&rdquo; for a whole area or vibe—we cap very long single stops so your schedule stays realistic.
+          </p>
         </div>
 
         {/* Trip selector */}
