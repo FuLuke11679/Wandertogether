@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type {
   Trip,
+  UserProfile,
   Activity,
   TripPreferences,
   ItineraryStop,
@@ -37,6 +38,7 @@ interface TripStore {
   // Data
   trips: Trip[];
   currentTripId: string | null;
+  userProfile: UserProfile;
 
   // Voting state (per-session, not persisted with the trip)
   completedPairs: string[]; // serialized as "id1:id2" sorted
@@ -44,6 +46,9 @@ interface TripStore {
 
   // Execution state
   execution: ExecutionState;
+
+  // ---------- Profile ----------
+  setUserProfile: (updates: Partial<UserProfile>) => void;
 
   // ---------- Trip CRUD ----------
   setCurrentTrip: (tripId: string) => void;
@@ -125,6 +130,8 @@ export const useTripStore = create<TripStore>()(
       trips: [SEED_TRIP],
       currentTripId: SEED_TRIP.id,
 
+      userProfile: { displayName: "Sarah", email: "" },
+
       completedPairs: [],
       comparisonCount: 0,
 
@@ -146,6 +153,11 @@ export const useTripStore = create<TripStore>()(
       },
 
       // ── Trip CRUD ────────────────────────────────────────────
+
+      setUserProfile: (updates) =>
+        set((s) => ({
+          userProfile: { ...s.userProfile, ...updates },
+        })),
 
       setCurrentTrip: (tripId) => set({ currentTripId: tripId }),
 
@@ -513,6 +525,7 @@ export const useTripStore = create<TripStore>()(
         trips: state.trips,
         currentTripId: state.currentTripId,
         execution: state.execution,
+        userProfile: state.userProfile,
       }),
       merge: (persistedState, currentState) => {
         const p = persistedState as Partial<TripStore> | undefined;
@@ -524,6 +537,10 @@ export const useTripStore = create<TripStore>()(
           trips: p.trips ?? c.trips,
           currentTripId: p.currentTripId ?? c.currentTripId,
           execution: p.execution ?? c.execution,
+          userProfile: {
+            ...c.userProfile,
+            ...(p.userProfile ?? {}),
+          },
         };
         // Demo seed trip must always exist (persisted state can drop it or corrupt ids)
         if (!merged.trips.some((t) => t.id === SEED_TRIP.id)) {

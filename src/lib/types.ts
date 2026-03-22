@@ -82,6 +82,12 @@ export type ItineraryDay = {
   stops: ItineraryStop[];
 };
 
+/** Local profile for greeting + future invite features */
+export type UserProfile = {
+  displayName: string;
+  email: string;
+};
+
 export type Trip = {
   id: string;
   destination: string;

@@ -26,6 +26,7 @@ export function HomePage() {
       onOpenTrip={(tripId) => withTrip(tripId, `/trip/${tripId}/vote`)}
       onOpenImport={(tripId) => withTrip(tripId, `/trip/${tripId}/import`)}
       onCreateTrip={(tripId) => withTrip(tripId, `/trip/${tripId}/import`)}
+      onOpenProfile={() => navigate("/profile")}
     />
   );
 }
