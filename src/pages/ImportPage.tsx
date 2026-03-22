@@ -27,7 +27,6 @@ export function ImportPage() {
     <ImportScreen
       onBack={() => navigate("/")}
       onGoHome={() => navigate("/")}
-      onContinueToVoting={() => navigate(`/trip/${id}/vote`)}
       tripId={trip.id}
       tripName={trip.destination}
       onExtract={async (rawUrl) => {
@@ -46,7 +45,11 @@ export function ImportPage() {
           contentForLLM = rawUrl;
         }
 
-        const { activities } = await extractActivities(contentForLLM, displayUrl);
+        const { activities } = await extractActivities(
+          contentForLLM,
+          displayUrl,
+          trip.destination,
+        );
 
         if (activities.length === 0) {
           throw new Error(
@@ -56,13 +59,13 @@ export function ImportPage() {
 
         return { activities, displayUrl };
       }}
-      onImportPlaces={(places: ExtractedPlace[]) => {
-        const activities = extractedPlacesToActivities(
+      onImportPlaces={async (places: ExtractedPlace[]) => {
+        const activities = await extractedPlacesToActivities(
           places,
+          trip.destination,
           trip.destination,
         );
         addActivities(trip.id, activities);
-        navigate(`/trip/${trip.id}/vote`);
       }}
     />
   );

@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
+import { parseMapLatLng } from "../../lib/geo";
+import { getGoogleMapsDirectionsUrl } from "../../lib/maps-url";
 import { useTripStore } from "../../lib/store";
 import { SEED_TRIP } from "../../lib/seed-data";
+import type { ItineraryStop } from "../../lib/types";
 
 const CORAL = "#E85D3A";
 const BG = "#FAFAF8";
@@ -26,6 +29,8 @@ interface Stop {
   emoji: string;
   groupPickRank?: number;
   transitNext?: { mode: string; duration: string };
+  /** Google Maps directions URL (real itinerary only) */
+  mapsUrl?: string;
 }
 
 const STOPS: Stop[] = [
@@ -247,7 +252,13 @@ function TokyoMap() {
   );
 }
 
-function TripMapPlaceholder({ destination }: { destination: string }) {
+function TripMapPlaceholder({
+  destination,
+  hint,
+}: {
+  destination: string;
+  hint?: string;
+}) {
   return (
     <div
       style={{
@@ -281,9 +292,82 @@ function TripMapPlaceholder({ destination }: { destination: string }) {
           lineHeight: 1.45,
         }}
       >
-        Build your itinerary to see stops on the map
+        {hint ??
+          "Build your itinerary to see stops on the map"}
       </p>
     </div>
+  );
+}
+
+/** Live map from Google Static Maps API (coordinates from the current day’s activities). */
+function DayRouteMap({
+  stops,
+  destination,
+  showTokyoSeedDemo,
+}: {
+  stops: ItineraryStop[];
+  destination: string;
+  showTokyoSeedDemo: boolean;
+}) {
+  const [imgError, setImgError] = useState(false);
+
+  const routeKey = stops.map((s) => s.activity.id).join(",");
+  useEffect(() => {
+    setImgError(false);
+  }, [routeKey]);
+
+  if (showTokyoSeedDemo) {
+    return <TokyoMap />;
+  }
+
+  if (stops.length === 0) {
+    return (
+      <TripMapPlaceholder
+        destination={destination}
+        hint="No stops on this day — pick another day above."
+      />
+    );
+  }
+
+  const coords = stops
+    .map((s) => parseMapLatLng(s.activity.location?.lat, s.activity.location?.lng))
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
+  const qs = coords.map((c) => `${c.lat},${c.lng}`).join("|");
+
+  if (coords.length === 0) {
+    return (
+      <TripMapPlaceholder
+        destination={destination}
+        hint="Stops don’t have usable map pins yet (missing or 0,0 coordinates). Re-import places with the API server + GOOGLE_MAPS_API_KEY running so Geocoding can run."
+      />
+    );
+  }
+
+  if (imgError) {
+    return (
+      <TripMapPlaceholder
+        destination={destination}
+        hint="Couldn’t load the map preview. Enable Maps Static API on your Google Cloud key and keep npm run dev:all running so /api proxies to the server."
+      />
+    );
+  }
+
+  const mapSrc = `/api/itinerary-static-map?p=${encodeURIComponent(qs)}`;
+  return (
+    <img
+      src={mapSrc}
+      alt={`Route map — ${destination}`}
+      width={390}
+      height={270}
+      style={{
+        display: "block",
+        width: 390,
+        height: 270,
+        objectFit: "cover",
+      }}
+      onError={() => setImgError(true)}
+    />
   );
 }
 
@@ -477,6 +561,8 @@ export function ItineraryScreen({ onBack, onStartDay, tripId }: ItineraryScreenP
   const selectedDayIndex = selectedDay - 1;
   const currentDayStops = trip?.itinerary[selectedDayIndex]?.stops ?? [];
 
+  const dest = trip?.destination;
+
   const storeStops: Stop[] = currentDayStops.map((s, i) => ({
     id: i + 1,
     startTime: s.startTime,
@@ -486,6 +572,7 @@ export function ItineraryScreen({ onBack, onStartDay, tripId }: ItineraryScreenP
     category: s.activity.category.charAt(0).toUpperCase() + s.activity.category.slice(1),
     emoji: s.activity.emoji ?? "📍",
     groupPickRank: s.priority <= 2 ? s.priority : undefined,
+    mapsUrl: getGoogleMapsDirectionsUrl(s.activity, dest),
     transitNext: i < currentDayStops.length - 1
       ? {
           mode: s.travelToNext.mode === "walk" ? "🚶" : s.travelToNext.mode === "transit" ? "🚇" : "🚕",
@@ -732,7 +819,11 @@ export function ItineraryScreen({ onBack, onStartDay, tripId }: ItineraryScreenP
           overflow: "hidden",
         }}
       >
-        <TokyoMap />
+        <DayRouteMap
+          stops={currentDayStops}
+          destination={trip?.destination ?? "Your trip"}
+          showTokyoSeedDemo={useSeedTokyoDemo}
+        />
       </div>
 
       {/* ── SCROLLABLE TIMELINE ── */}

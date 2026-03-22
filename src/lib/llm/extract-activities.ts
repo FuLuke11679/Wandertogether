@@ -7,7 +7,13 @@ type RawExtracted = {
   description: string;
   category: string;
   estimatedDuration: number;
-  location: { lat: number; lng: number; neighborhood: string };
+  location: {
+    lat: number;
+    lng: number;
+    neighborhood: string;
+    googlePlaceId?: string;
+    formattedAddress?: string;
+  };
   emoji?: string;
 };
 
@@ -20,13 +26,27 @@ function toActivity(raw: RawExtracted, sourceUrl?: string): Activity {
   const category = (raw.category ?? "culture") as Activity["category"];
   const rawMin = raw.estimatedDuration ?? 60;
 
+  const loc = raw.location ?? {
+    lat: 0,
+    lng: 0,
+    neighborhood: "",
+  };
+
   return {
     id,
     name: raw.name,
     description: raw.description,
     category,
     estimatedDuration: clampExtractedEstimatedDuration(rawMin, category),
-    location: raw.location,
+    location: {
+      lat: loc.lat,
+      lng: loc.lng,
+      neighborhood: loc.neighborhood ?? "",
+      ...(loc.googlePlaceId ? { googlePlaceId: loc.googlePlaceId } : {}),
+      ...(loc.formattedAddress
+        ? { formattedAddress: loc.formattedAddress }
+        : {}),
+    },
     emoji: raw.emoji,
     source: sourceUrl,
   };
@@ -85,11 +105,13 @@ const FALLBACK_EXTRACTED: Activity[] = [
 export async function extractActivities(
   content: string,
   sourceUrl?: string,
+  /** Trip destination — enables Google Geocoding on the server after extraction */
+  destination?: string,
 ): Promise<{ activities: Activity[]; fromLLM: boolean }> {
   try {
     const res = await post<{ activities: RawExtracted[] }>(
       "/extract-activities",
-      { content, sourceUrl },
+      { content, sourceUrl, destination },
     );
 
     if (!Array.isArray(res.activities) || res.activities.length === 0) {

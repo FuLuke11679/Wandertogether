@@ -19,7 +19,7 @@ interface Props {
   sourceUrl: string;
   places: ExtractedPlace[];
   onClose: () => void;
-  onImport: (places: ExtractedPlace[], tripId: string) => void;
+  onImport: (places: ExtractedPlace[], tripId: string) => void | Promise<void>;
   /** When set, trip picker is hidden and imports target this trip */
   lockedTripId?: string;
   lockedTripName?: string;
@@ -160,11 +160,18 @@ export function PlaceSelectionSheet({
   const handleImport = () => {
     setImported(true);
     setTimeout(() => {
-      onImport(
-        places.filter((p) => p.checked),
-        lockedTripId ?? selectedTrip.id,
-      );
-      dismiss();
+      void (async () => {
+        try {
+          await Promise.resolve(
+            onImport(
+              places.filter((p) => p.checked),
+              lockedTripId ?? selectedTrip.id,
+            ),
+          );
+        } finally {
+          dismiss();
+        }
+      })();
     }, 900);
   };
 
