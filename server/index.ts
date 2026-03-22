@@ -60,46 +60,7 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/itinerary-static-map", async (req, res) => {
   const raw = req.query.p;
-  // #region agent log
-  fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "3d958d",
-    },
-    body: JSON.stringify({
-      sessionId: "3d958d",
-      location: "server/index.ts:itinerary-static-map:entry",
-      message: "static map request received",
-      data: {
-        pType: typeof raw,
-        pLen: typeof raw === "string" ? raw.length : 0,
-      },
-      timestamp: Date.now(),
-      hypothesisId: "H-B,H-C",
-      runId: "pre-fix",
-    }),
-  }).catch(() => {});
-  // #endregion
   if (typeof raw !== "string" || !raw.trim()) {
-    // #region agent log
-    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "3d958d",
-      },
-      body: JSON.stringify({
-        sessionId: "3d958d",
-        location: "server/index.ts:itinerary-static-map:400",
-        message: "missing p query",
-        data: {},
-        timestamp: Date.now(),
-        hypothesisId: "H-C",
-        runId: "pre-fix",
-      }),
-    }).catch(() => {});
-    // #endregion
     res.status(400).send("Missing or invalid p= query (lat,lng|lat,lng|…)");
     return;
   }
@@ -118,48 +79,12 @@ app.get("/api/itinerary-static-map", async (req, res) => {
   }
 
   if (points.length === 0) {
-    // #region agent log
-    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "3d958d",
-      },
-      body: JSON.stringify({
-        sessionId: "3d958d",
-        location: "server/index.ts:itinerary-static-map:404",
-        message: "no valid points after parse",
-        data: { rawSegCount: raw.split("|").length },
-        timestamp: Date.now(),
-        hypothesisId: "H-C",
-        runId: "pre-fix",
-      }),
-    }).catch(() => {});
-    // #endregion
     res.status(404).send("No valid coordinates");
     return;
   }
 
   const key = getGoogleMapsApiKey();
   if (!key) {
-    // #region agent log
-    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "3d958d",
-      },
-      body: JSON.stringify({
-        sessionId: "3d958d",
-        location: "server/index.ts:itinerary-static-map:503",
-        message: "no google key",
-        data: {},
-        timestamp: Date.now(),
-        hypothesisId: "H-C",
-        runId: "pre-fix",
-      }),
-    }).catch(() => {});
-    // #endregion
     res.status(503).send("GOOGLE_MAPS_API_KEY not configured");
     return;
   }
@@ -167,69 +92,13 @@ app.get("/api/itinerary-static-map", async (req, res) => {
   try {
     const png = await fetchItineraryStaticMapPng(points, key);
     if (!png) {
-      // #region agent log
-      fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "3d958d",
-        },
-        body: JSON.stringify({
-          sessionId: "3d958d",
-          location: "server/index.ts:itinerary-static-map:502",
-          message: "fetchItineraryStaticMapPng returned null",
-          data: { pointCount: points.length },
-          timestamp: Date.now(),
-          hypothesisId: "H-A,H-D",
-          runId: "pre-fix",
-        }),
-      }).catch(() => {});
-      // #endregion
       res.status(502).send("Static map request failed");
       return;
     }
-    // #region agent log
-    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "3d958d",
-      },
-      body: JSON.stringify({
-        sessionId: "3d958d",
-        location: "server/index.ts:itinerary-static-map:200",
-        message: "sending png to client",
-        data: { byteLength: png.length, pointCount: points.length },
-        timestamp: Date.now(),
-        hypothesisId: "H-B",
-        runId: "pre-fix",
-      }),
-    }).catch(() => {});
-    // #endregion
     res.setHeader("Cache-Control", "public, max-age=300");
     res.type("image/png").send(png);
   } catch (err) {
     console.error("itinerary-static-map:", err);
-    // #region agent log
-    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "3d958d",
-      },
-      body: JSON.stringify({
-        sessionId: "3d958d",
-        location: "server/index.ts:itinerary-static-map:500",
-        message: "handler threw",
-        data: {
-          err: err instanceof Error ? err.message : String(err),
-        },
-        timestamp: Date.now(),
-        hypothesisId: "H-B",
-        runId: "pre-fix",
-      }),
-    }).catch(() => {});
-    // #endregion
     res.status(500).send("Server error");
   }
 });

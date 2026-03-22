@@ -26,6 +26,7 @@ type GeocodePlacesResponse = {
     lng: number;
     neighborhood: string;
     googlePlaceId?: string;
+    formattedAddress?: string;
   } | null>;
   destinationCenter: { lat: number; lng: number } | null;
 };
@@ -79,6 +80,9 @@ export async function extractedPlacesToActivities(
         neighborhood,
         ...(geo?.googlePlaceId
           ? { googlePlaceId: geo.googlePlaceId }
+          : {}),
+        ...(geo?.formattedAddress
+          ? { formattedAddress: geo.formattedAddress }
           : {}),
       },
       category,

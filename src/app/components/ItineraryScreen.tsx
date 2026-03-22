@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { parseMapLatLng } from "../../lib/geo";
+import { getGoogleMapsDirectionsUrl } from "../../lib/maps-url";
 import { useTripStore } from "../../lib/store";
 import { SEED_TRIP } from "../../lib/seed-data";
 import type { ItineraryStop } from "../../lib/types";
@@ -28,6 +29,8 @@ interface Stop {
   emoji: string;
   groupPickRank?: number;
   transitNext?: { mode: string; duration: string };
+  /** Google Maps directions URL (real itinerary only) */
+  mapsUrl?: string;
 }
 
 const STOPS: Stop[] = [
@@ -363,59 +366,7 @@ function DayRouteMap({
         height: 270,
         objectFit: "cover",
       }}
-      onLoad={() => {
-        // #region agent log
-        fetch(
-          "http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "3d958d",
-            },
-            body: JSON.stringify({
-              sessionId: "3d958d",
-              location: "ItineraryScreen.tsx:DayRouteMap:img:onLoad",
-              message: "static map image decoded OK",
-              data: { coordsCount: coords.length },
-              timestamp: Date.now(),
-              hypothesisId: "verify",
-              runId: "post-fix",
-            }),
-          },
-        ).catch(() => {});
-        // #endregion
-      }}
-      onError={(e) => {
-        // #region agent log
-        fetch(
-          "http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "3d958d",
-            },
-            body: JSON.stringify({
-              sessionId: "3d958d",
-              location: "ItineraryScreen.tsx:DayRouteMap:img:onError",
-              message: "browser failed to load static map image",
-              data: {
-                currentSrc: (e.currentTarget as HTMLImageElement).currentSrc?.slice(
-                  0,
-                  180,
-                ),
-                coordsCount: coords.length,
-              },
-              timestamp: Date.now(),
-              hypothesisId: "H-B",
-              runId: "pre-fix",
-            }),
-          },
-        ).catch(() => {});
-        // #endregion
-        setImgError(true);
-      }}
+      onError={() => setImgError(true)}
     />
   );
 }
@@ -610,6 +561,8 @@ export function ItineraryScreen({ onBack, onStartDay, tripId }: ItineraryScreenP
   const selectedDayIndex = selectedDay - 1;
   const currentDayStops = trip?.itinerary[selectedDayIndex]?.stops ?? [];
 
+  const dest = trip?.destination;
+
   const storeStops: Stop[] = currentDayStops.map((s, i) => ({
     id: i + 1,
     startTime: s.startTime,
@@ -619,6 +572,7 @@ export function ItineraryScreen({ onBack, onStartDay, tripId }: ItineraryScreenP
     category: s.activity.category.charAt(0).toUpperCase() + s.activity.category.slice(1),
     emoji: s.activity.emoji ?? "📍",
     groupPickRank: s.priority <= 2 ? s.priority : undefined,
+    mapsUrl: getGoogleMapsDirectionsUrl(s.activity, dest),
     transitNext: i < currentDayStops.length - 1
       ? {
           mode: s.travelToNext.mode === "walk" ? "🚶" : s.travelToNext.mode === "transit" ? "🚇" : "🚕",

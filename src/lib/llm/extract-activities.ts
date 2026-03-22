@@ -12,6 +12,7 @@ type RawExtracted = {
     lng: number;
     neighborhood: string;
     googlePlaceId?: string;
+    formattedAddress?: string;
   };
   emoji?: string;
 };
@@ -42,6 +43,9 @@ function toActivity(raw: RawExtracted, sourceUrl?: string): Activity {
       lng: loc.lng,
       neighborhood: loc.neighborhood ?? "",
       ...(loc.googlePlaceId ? { googlePlaceId: loc.googlePlaceId } : {}),
+      ...(loc.formattedAddress
+        ? { formattedAddress: loc.formattedAddress }
+        : {}),
     },
     emoji: raw.emoji,
     source: sourceUrl,

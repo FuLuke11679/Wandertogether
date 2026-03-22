@@ -264,6 +264,9 @@ export async function enrichRawActivitiesWithGeocode(
           lng: g.lng,
           neighborhood: g.neighborhood || nb || "",
           googlePlaceId: g.googlePlaceId,
+          ...(g.formattedAddress
+            ? { formattedAddress: g.formattedAddress }
+            : {}),
         },
       });
     } else {
@@ -385,31 +388,6 @@ export async function fetchItineraryStaticMapPng(
       res.status,
       text.slice(0, 300),
     );
-    // #region agent log
-    const redactedLen = url.toString().replace(apiKey, "REDACTED").length;
-    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "3d958d",
-      },
-      body: JSON.stringify({
-        sessionId: "3d958d",
-        location: "server/google-maps.ts:fetchItineraryStaticMapPng:fail",
-        message: "Google Static Maps non-image or error",
-        data: {
-          googleStatus: res.status,
-          contentType: ct,
-          bodySnippet: text.slice(0, 400),
-          requestUrlLen: redactedLen,
-          pointCount: cleaned.length,
-        },
-        timestamp: Date.now(),
-        hypothesisId: "H-A,H-D,H-E",
-        runId: "pre-fix",
-      }),
-    }).catch(() => {});
-    // #endregion
     return null;
   }
 

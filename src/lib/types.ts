@@ -16,6 +16,8 @@ export type Activity = {
     neighborhood: string;
     /** Google Place ID for accurate Maps deep links when present */
     googlePlaceId?: string;
+    /** From Geocoding — best string to show in Maps destination/search */
+    formattedAddress?: string;
   };
   category: ActivityCategory;
   estimatedDuration: number; // minutes
