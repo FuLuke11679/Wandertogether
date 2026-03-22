@@ -2,7 +2,9 @@ import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ImportScreen } from "../app/components/ImportScreen";
 import { useTripStore } from "../lib/store";
-import { extractPlacesFromTikTokUrl } from "../lib/tiktok-import-flow";
+import { isTikTokUrl, normalizeTikTokUrl } from "../lib/tiktok-url";
+import { fetchTikTokTranscript } from "../lib/tiktok-transcript";
+import { extractActivities } from "../lib/llm/extract-activities";
 import { extractedPlacesToActivities } from "../lib/places-to-activities";
 import type { ExtractedPlace } from "../lib/extracted-place";
 
@@ -25,11 +27,35 @@ export function ImportPage() {
     <ImportScreen
       onBack={() => navigate("/")}
       onGoHome={() => navigate("/")}
+      onContinueToVoting={() => navigate(`/trip/${id}/vote`)}
       tripId={trip.id}
       tripName={trip.destination}
-      onExtractUrl={(raw) =>
-        extractPlacesFromTikTokUrl(raw, { tripDestination: trip.destination })
-      }
+      onExtract={async (rawUrl) => {
+        let contentForLLM: string;
+        let displayUrl = rawUrl;
+
+        if (isTikTokUrl(rawUrl)) {
+          const normalized = normalizeTikTokUrl(rawUrl);
+          displayUrl = normalized;
+          const transcript = await fetchTikTokTranscript({
+            url: normalized,
+            language: "en",
+          });
+          contentForLLM = transcript.transcriptPlain;
+        } else {
+          contentForLLM = rawUrl;
+        }
+
+        const { activities } = await extractActivities(contentForLLM, displayUrl);
+
+        if (activities.length === 0) {
+          throw new Error(
+            "No places were detected. Try another video or add a place manually.",
+          );
+        }
+
+        return { activities, displayUrl };
+      }}
       onImportPlaces={(places: ExtractedPlace[]) => {
         const activities = extractedPlacesToActivities(
           places,

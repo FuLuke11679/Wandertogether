@@ -8,6 +8,7 @@ export function BuildingPage() {
   return (
     <BuildingItineraryScreen
       onComplete={() => navigate(`/trip/${id}/plan`, { replace: true })}
+      tripId={id}
     />
   );
 }

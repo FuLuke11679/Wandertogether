@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ExecutionScreen } from "../app/components/ExecutionScreen";
 import { SalvageModeSheet } from "../app/components/SalvageModeSheet";
@@ -10,11 +10,6 @@ export function LivePage() {
   const currentTripId = useTripStore((s) => s.currentTripId);
   const tripId = id ?? currentTripId ?? "";
   const [salvageOpen, setSalvageOpen] = useState(false);
-
-  useEffect(() => {
-    if (!tripId) return;
-    useTripStore.getState().startExecution(tripId);
-  }, [tripId]);
 
   if (!tripId) {
     navigate("/");

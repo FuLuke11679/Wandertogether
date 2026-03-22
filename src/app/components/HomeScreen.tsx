@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { CreateTripSheet } from "./CreateTripSheet";
+import { useTripStore } from "../../lib/store";
+import type { Trip } from "../../lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CORAL  = "#E85D3A";
@@ -238,9 +240,9 @@ function PastTripCard({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 interface HomeScreenProps {
-  onOpenTrip: () => void;
-  onOpenImport?: () => void;
-  onCreateTrip?: () => void;
+  onOpenTrip: (tripId: string) => void;
+  onOpenImport?: (tripId: string) => void;
+  onCreateTrip?: (tripId: string) => void;
 }
 
 export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScreenProps) {
@@ -248,6 +250,8 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
   const [heroPressed, setHeroPressed] = useState(false);
   const [createOpen, setCreateOpen]   = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const store = useTripStore();
+  const currentTrip = store.getCurrentTrip();
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 60);
@@ -403,10 +407,10 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
         >
           <div
             onMouseDown={() => setHeroPressed(true)}
-            onMouseUp={() => { setHeroPressed(false); onOpenTrip(); }}
+            onMouseUp={() => { setHeroPressed(false); onOpenTrip(currentTrip?.id ?? "tokyo-2026"); }}
             onMouseLeave={() => setHeroPressed(false)}
             onTouchStart={() => setHeroPressed(true)}
-            onTouchEnd={() => { setHeroPressed(false); onOpenTrip(); }}
+            onTouchEnd={() => { setHeroPressed(false); onOpenTrip(currentTrip?.id ?? "tokyo-2026"); }}
             style={{
               height: 210,
               borderRadius: 18,
@@ -525,7 +529,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
                     textShadow: "0 2px 16px rgba(0,0,0,0.4)",
                   }}
                 >
-                  Tokyo Adventure
+                  {currentTrip?.destination ?? "Tokyo"} Adventure
                 </h2>
 
                 {/* Date range */}
@@ -547,13 +551,13 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
                     <path d="M1 5h9" stroke="rgba(255,255,255,0.6)" strokeWidth="1.1" />
                     <path d="M3.5 1v2M7.5 1v2" stroke="rgba(255,255,255,0.6)" strokeWidth="1.1" strokeLinecap="round" />
                   </svg>
-                  Mar 22 – 26, 2026
+                  {currentTrip ? `${new Date(currentTrip.dates.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(currentTrip.dates.end).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${new Date(currentTrip.dates.start).getFullYear()}` : "Mar 22 – 26, 2026"}
                 </p>
 
                 {/* Bottom row: avatars + vote pill */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <AvatarStack initials={["S", "M", "J", "A"]} size={28} />
+                    <AvatarStack initials={currentTrip?.members.map(m => m.initials) ?? ["S", "M", "J", "A"]} size={28} />
                     <span
                       style={{
                         fontFamily: "'Inter', sans-serif",
@@ -562,11 +566,11 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
                         fontWeight: 400,
                       }}
                     >
-                      4 travellers
+                      {currentTrip?.members.length ?? 4} travellers
                     </span>
                   </div>
 
-                  <StatusPill label="3 of 4 voted" variant="white" />
+                  <StatusPill label={currentTrip ? `${currentTrip.rankings.length} of ${currentTrip.members.length} voted` : "3 of 4 voted"} variant="white" />
                 </div>
               </div>
             </div>
@@ -783,7 +787,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
                 letterSpacing: "-0.1px",
               }}
             >
-              ＋ Start a new trip
+              Start a new trip
             </span>
             <span
               style={{
@@ -932,7 +936,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
         {[
           { icon: <IconHome active />,    label: "Home",    active: true,  onClick: undefined },
           { icon: <IconCompass />,         label: "Explore", active: false, onClick: undefined },
-          { icon: <IconImport />,          label: "Import",  active: false, onClick: onOpenImport },
+          { icon: <IconImport />,          label: "Import",  active: false, onClick: () => onOpenImport?.(currentTrip?.id ?? "tokyo-2026") },
           { icon: <IconProfile />,         label: "Profile", active: false, onClick: undefined },
         ].map((tab) => (
           <button
@@ -970,7 +974,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
       {createOpen && (
         <CreateTripSheet
           onClose={() => setCreateOpen(false)}
-          onCreate={() => { setCreateOpen(false); (onCreateTrip ?? onOpenTrip)(); }}
+          onCreate={(tripId) => { setCreateOpen(false); (onCreateTrip ?? onOpenImport ?? onOpenTrip)(tripId); }}
         />
       )}
     </div>

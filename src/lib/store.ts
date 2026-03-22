@@ -5,6 +5,7 @@ import type {
   Activity,
   TripPreferences,
   ItineraryStop,
+  ItineraryDay,
   UserRanking,
   GroupPriority,
   ExecutionState,
@@ -24,6 +25,9 @@ import {
   FALLBACK_SALVAGE,
   DEFAULT_PREFERENCES,
 } from "./seed-data";
+import { extractActivities } from "./llm/extract-activities";
+import { generateItinerary } from "./llm/generate-itinerary";
+import { adaptTrip } from "./llm/adapt-trip";
 
 // ---------------------------------------------------------------------------
 // Store interface
@@ -60,11 +64,13 @@ interface TripStore {
   setPreferences: (tripId: string, prefs: Partial<TripPreferences>) => void;
 
   // ---------- Itinerary ----------
-  setItinerary: (tripId: string, stops: ItineraryStop[]) => void;
+  setItinerary: (tripId: string, days: ItineraryDay[]) => void;
   loadFallbackItinerary: (tripId: string) => void;
+  getDayStops: (tripId: string, dayIndex: number) => ItineraryStop[];
+  getTripDayCount: (tripId: string) => number;
 
   // ---------- Execution ----------
-  startExecution: (tripId: string) => void;
+  startExecution: (tripId: string, dayIndex?: number) => void;
   advanceStop: (tripId: string) => void;
   skipStop: (tripId: string) => void;
   shouldTriggerSalvage: (tripId: string) => boolean;
@@ -73,6 +79,22 @@ interface TripStore {
   // ---------- Salvage ----------
   applySalvage: (tripId: string, newStops: ItineraryStop[]) => void;
   applyFallbackSalvage: (tripId: string) => string;
+
+  // ---------- LLM-powered async actions ----------
+  extractAndAddActivities: (
+    tripId: string,
+    content: string,
+    sourceUrl?: string,
+  ) => Promise<{ activities: Activity[]; fromLLM: boolean }>;
+  generateLLMItinerary: (tripId: string) => Promise<{
+    days: ItineraryDay[];
+    reasoning?: string;
+    fromLLM: boolean;
+  }>;
+  adaptTripLLM: (
+    tripId: string,
+    reason?: SalvageReason,
+  ) => Promise<{ message: string; fromLLM: boolean }>;
 
   // ---------- Helpers ----------
   getTrip: (tripId: string) => Trip | undefined;
@@ -107,6 +129,7 @@ export const useTripStore = create<TripStore>()(
       comparisonCount: 0,
 
       execution: {
+        activeDayIndex: 0,
         activeStopIndex: 0,
         completedIds: [],
         skippedIds: [],
@@ -241,10 +264,10 @@ export const useTripStore = create<TripStore>()(
 
       // ── Itinerary ────────────────────────────────────────────
 
-      setItinerary: (tripId, stops) =>
+      setItinerary: (tripId, days) =>
         set((s) => ({
-          trips: updateTrip(s.trips, tripId, (t) => ({
-            itinerary: stops,
+          trips: updateTrip(s.trips, tripId, () => ({
+            itinerary: days,
             status: "active",
           })),
         })),
@@ -252,27 +275,52 @@ export const useTripStore = create<TripStore>()(
       loadFallbackItinerary: (tripId) =>
         set((s) => ({
           trips: updateTrip(s.trips, tripId, () => ({
-            itinerary: FALLBACK_ITINERARY.map((s) => ({ ...s, status: "upcoming" as const })),
+            itinerary: FALLBACK_ITINERARY.map((day) => ({
+              ...day,
+              stops: day.stops.map((stop) => ({ ...stop, status: "upcoming" as const })),
+            })),
             status: "active",
           })),
         })),
 
+      getDayStops: (tripId, dayIndex) => {
+        const trip = get().getTrip(tripId);
+        if (!trip || dayIndex < 0 || dayIndex >= trip.itinerary.length) return [];
+        return trip.itinerary[dayIndex].stops;
+      },
+
+      getTripDayCount: (tripId) => {
+        const trip = get().getTrip(tripId);
+        return trip?.itinerary.length ?? 0;
+      },
+
       // ── Execution ────────────────────────────────────────────
 
-      startExecution: (tripId) => {
+      startExecution: (tripId, dayIndex) => {
         const trip = get().getTrip(tripId);
         if (!trip || trip.itinerary.length === 0) return;
 
-        const updatedStops = trip.itinerary.map((stop, i) => ({
-          ...stop,
-          status: i === 0 ? ("active" as const) : ("upcoming" as const),
-        }));
+        const di = dayIndex ?? get().execution.activeDayIndex;
+        const day = trip.itinerary[di];
+        if (!day || day.stops.length === 0) return;
+
+        const updatedItinerary = trip.itinerary.map((d, dIdx) => {
+          if (dIdx !== di) return d;
+          return {
+            ...d,
+            stops: d.stops.map((stop, i) => ({
+              ...stop,
+              status: i === 0 ? ("active" as const) : ("upcoming" as const),
+            })),
+          };
+        });
 
         set((s) => ({
           trips: updateTrip(s.trips, tripId, () => ({
-            itinerary: updatedStops,
+            itinerary: updatedItinerary,
           })),
           execution: {
+            activeDayIndex: di,
             activeStopIndex: 0,
             completedIds: [],
             skippedIds: [],
@@ -286,21 +334,27 @@ export const useTripStore = create<TripStore>()(
         const { execution } = get();
         if (!trip) return;
 
-        const currentStop = trip.itinerary[execution.activeStopIndex];
+        const day = trip.itinerary[execution.activeDayIndex];
+        if (!day) return;
+        const currentStop = day.stops[execution.activeStopIndex];
         if (!currentStop) return;
 
         const nextIndex = execution.activeStopIndex + 1;
-        const updatedStops = trip.itinerary.map((stop, i) => {
-          if (i === execution.activeStopIndex)
-            return { ...stop, status: "completed" as const };
-          if (i === nextIndex)
-            return { ...stop, status: "active" as const };
-          return stop;
+        const updatedItinerary = trip.itinerary.map((d, dIdx) => {
+          if (dIdx !== execution.activeDayIndex) return d;
+          return {
+            ...d,
+            stops: d.stops.map((stop, i) => {
+              if (i === execution.activeStopIndex) return { ...stop, status: "completed" as const };
+              if (i === nextIndex) return { ...stop, status: "active" as const };
+              return stop;
+            }),
+          };
         });
 
         set((s) => ({
           trips: updateTrip(s.trips, tripId, () => ({
-            itinerary: updatedStops,
+            itinerary: updatedItinerary,
           })),
           execution: {
             ...s.execution,
@@ -315,21 +369,27 @@ export const useTripStore = create<TripStore>()(
         const { execution } = get();
         if (!trip) return;
 
-        const currentStop = trip.itinerary[execution.activeStopIndex];
+        const day = trip.itinerary[execution.activeDayIndex];
+        if (!day) return;
+        const currentStop = day.stops[execution.activeStopIndex];
         if (!currentStop) return;
 
         const nextIndex = execution.activeStopIndex + 1;
-        const updatedStops = trip.itinerary.map((stop, i) => {
-          if (i === execution.activeStopIndex)
-            return { ...stop, status: "skipped" as const };
-          if (i === nextIndex)
-            return { ...stop, status: "active" as const };
-          return stop;
+        const updatedItinerary = trip.itinerary.map((d, dIdx) => {
+          if (dIdx !== execution.activeDayIndex) return d;
+          return {
+            ...d,
+            stops: d.stops.map((stop, i) => {
+              if (i === execution.activeStopIndex) return { ...stop, status: "skipped" as const };
+              if (i === nextIndex) return { ...stop, status: "active" as const };
+              return stop;
+            }),
+          };
         });
 
         set((s) => ({
           trips: updateTrip(s.trips, tripId, () => ({
-            itinerary: updatedStops,
+            itinerary: updatedItinerary,
           })),
           execution: {
             ...s.execution,
@@ -346,10 +406,11 @@ export const useTripStore = create<TripStore>()(
         const trip = get().getTrip(tripId);
         if (!trip || !execution.startedAt) return false;
 
-        const activeStop = trip.itinerary[execution.activeStopIndex];
+        const day = trip.itinerary[execution.activeDayIndex];
+        if (!day) return false;
+        const activeStop = day.stops[execution.activeStopIndex];
         if (!activeStop) return false;
 
-        // Parse end time (HH:MM format) and check if we're 30+ min behind
         const [hours, minutes] = activeStop.endTime.split(":").map(Number);
         if (isNaN(hours) || isNaN(minutes)) return false;
 
@@ -364,15 +425,21 @@ export const useTripStore = create<TripStore>()(
       getActiveStop: (tripId) => {
         const trip = get().getTrip(tripId);
         if (!trip) return undefined;
-        return trip.itinerary[get().execution.activeStopIndex];
+        const { execution } = get();
+        const day = trip.itinerary[execution.activeDayIndex];
+        if (!day) return undefined;
+        return day.stops[execution.activeStopIndex];
       },
 
       // ── Salvage ──────────────────────────────────────────────
 
-      applySalvage: (tripId, newStops) =>
+      applySalvage: (tripId, newStops) => {
+        const { execution } = get();
         set((s) => ({
-          trips: updateTrip(s.trips, tripId, () => ({
-            itinerary: newStops,
+          trips: updateTrip(s.trips, tripId, (t) => ({
+            itinerary: t.itinerary.map((d, dIdx) =>
+              dIdx === execution.activeDayIndex ? { ...d, stops: newStops } : d,
+            ),
           })),
           execution: {
             ...s.execution,
@@ -380,11 +447,64 @@ export const useTripStore = create<TripStore>()(
             completedIds: [],
             skippedIds: [],
           },
-        })),
+        }));
+      },
 
       applyFallbackSalvage: (tripId) => {
         get().applySalvage(tripId, FALLBACK_SALVAGE.stops);
         return FALLBACK_SALVAGE.message;
+      },
+
+      // ── LLM-powered async actions ─────────────────────────────
+
+      extractAndAddActivities: async (tripId, content, sourceUrl) => {
+        const result = await extractActivities(content, sourceUrl);
+        if (result.activities.length > 0) {
+          get().addActivities(tripId, result.activities);
+        }
+        return result;
+      },
+
+      generateLLMItinerary: async (tripId) => {
+        const trip = get().getTrip(tripId);
+        if (!trip) throw new Error("Trip not found");
+
+        const result = await generateItinerary(
+          trip.activities,
+          trip.groupPriorities,
+          trip.preferences,
+          trip.dates,
+          trip.destination,
+        );
+
+        if (result.days.length > 0) {
+          get().setItinerary(tripId, result.days);
+        }
+
+        return result;
+      },
+
+      adaptTripLLM: async (tripId, reason) => {
+        const trip = get().getTrip(tripId);
+        if (!trip) throw new Error("Trip not found");
+
+        const { execution } = get();
+        const currentDay = trip.itinerary[execution.activeDayIndex];
+        const dayStops = currentDay?.stops ?? [];
+        const { result, fromLLM } = await adaptTrip(
+          dayStops,
+          execution.completedIds,
+          execution.skippedIds,
+          trip.activities,
+          reason,
+          trip.destination,
+        );
+
+        if (result.stops.length > 0) {
+          get().applySalvage(tripId, result.stops);
+        }
+
+        return { message: result.message, fromLLM };
       },
     }),
     {

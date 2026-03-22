@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from "react-router";
 import { ItineraryScreen } from "../app/components/ItineraryScreen";
+import { useTripStore } from "../lib/store";
 
 export function PlanPage() {
   const navigate = useNavigate();
@@ -8,7 +9,13 @@ export function PlanPage() {
   return (
     <ItineraryScreen
       onBack={() => navigate(`/trip/${id}/preferences`)}
-      onStartDay={() => navigate(`/trip/${id}/live`)}
+      onStartDay={(dayIndex) => {
+        if (id) {
+          useTripStore.getState().startExecution(id, dayIndex);
+        }
+        navigate(`/trip/${id}/live`);
+      }}
+      tripId={id}
     />
   );
 }

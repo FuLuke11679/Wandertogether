@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTripStore } from "../../lib/store";
 
 const CORAL = "#E85D3A";
 const BG = "#FAFAF8";
@@ -421,23 +422,71 @@ function StopCard({ stop, index, visible }: { stop: Stop; index: number; visible
 
 interface ItineraryScreenProps {
   onBack: () => void;
-  onStartDay: () => void;
+  onStartDay: (dayIndex: number) => void;
+  tripId?: string;
 }
 
-export function ItineraryScreen({ onBack, onStartDay }: ItineraryScreenProps) {
+export function ItineraryScreen({ onBack, onStartDay, tripId }: ItineraryScreenProps) {
   const [selectedDay, setSelectedDay] = useState(1);
   const [visible, setVisible] = useState(false);
+
+  const store = useTripStore();
+  const trip = tripId ? store.getTrip(tripId) : store.getCurrentTrip();
+
+  const selectedDayIndex = selectedDay - 1;
+  const currentDayStops = trip?.itinerary[selectedDayIndex]?.stops ?? [];
+
+  const storeStops: Stop[] = currentDayStops.map((s, i) => ({
+    id: i + 1,
+    startTime: s.startTime,
+    endTime: s.endTime,
+    name: s.activity.name,
+    description: s.activity.description,
+    category: s.activity.category.charAt(0).toUpperCase() + s.activity.category.slice(1),
+    emoji: s.activity.emoji ?? "📍",
+    groupPickRank: s.priority <= 2 ? s.priority : undefined,
+    transitNext: i < currentDayStops.length - 1
+      ? {
+          mode: s.travelToNext.mode === "walk" ? "🚶" : s.travelToNext.mode === "transit" ? "🚇" : "🚕",
+          duration: `${s.travelToNext.duration} min ${s.travelToNext.mode}`,
+        }
+      : undefined,
+  }));
+
+  const displayStops = storeStops.length > 0 ? storeStops : STOPS;
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 100);
     return () => clearTimeout(t);
   }, []);
 
-  const days = [
-    { n: 1, label: "Day 1", date: "Mar 22" },
-    { n: 2, label: "Day 2", date: "Mar 23" },
-    { n: 3, label: "Day 3", date: "Mar 24" },
-  ];
+  const days = (() => {
+    if (trip && trip.itinerary.length > 0) {
+      return trip.itinerary.map((day, i) => {
+        const d = new Date(day.date + "T00:00:00");
+        return {
+          n: i + 1,
+          label: `Day ${i + 1}`,
+          date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          stopCount: day.stops.length,
+        };
+      });
+    }
+    if (!trip) return [{ n: 1, label: "Day 1", date: "Mar 22", stopCount: 4 }, { n: 2, label: "Day 2", date: "Mar 23", stopCount: 0 }, { n: 3, label: "Day 3", date: "Mar 24", stopCount: 0 }];
+    const start = new Date(trip.dates.start + "T00:00:00");
+    const end = new Date(trip.dates.end + "T00:00:00");
+    const count = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    return Array.from({ length: Math.min(count, 7) }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      return {
+        n: i + 1,
+        label: `Day ${i + 1}`,
+        date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        stopCount: 0,
+      };
+    });
+  })();
 
   return (
     <div
@@ -513,7 +562,7 @@ export function ItineraryScreen({ onBack, onStartDay }: ItineraryScreenProps) {
                   fontWeight: 400,
                 }}
               >
-                March {21 + selectedDay}, 2026
+                {days[selectedDayIndex]?.date ?? ""}
               </span>
             </div>
           </div>
@@ -538,13 +587,13 @@ export function ItineraryScreen({ onBack, onStartDay }: ItineraryScreenProps) {
               <path d="M4.5 7c0-1.8 1.6-3 3.5-3S11 5.2 11 7" stroke="#A09890" strokeWidth="1.1" fill="none" strokeLinecap="round" />
             </svg>
             <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: "#8A8278", fontWeight: 500 }}>
-              4 going
+              {trip?.members.length ?? 4} going
             </span>
           </div>
         </div>
 
         {/* Row 2: Day pills */}
-        <div style={{ display: "flex", gap: 7 }}>
+        <div style={{ display: "flex", gap: 7, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
           {days.map((d) => {
             const isSelected = selectedDay === d.n;
             return (
@@ -563,6 +612,7 @@ export function ItineraryScreen({ onBack, onStartDay }: ItineraryScreenProps) {
                   transition: "all 0.18s ease",
                   WebkitTapHighlightColor: "transparent",
                   gap: 1,
+                  flexShrink: 0,
                 }}
               >
                 <span
@@ -608,7 +658,22 @@ export function ItineraryScreen({ onBack, onStartDay }: ItineraryScreenProps) {
               <path d="M5.5 3V5.5L7 7" stroke="#A09890" strokeWidth="1.1" strokeLinecap="round" />
             </svg>
             <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: "#8A8278", fontWeight: 500 }}>
-              7.5 hrs
+              {(() => {
+                if (displayStops.length < 2) return "—";
+                const first = displayStops[0].startTime;
+                const last = displayStops[displayStops.length - 1].endTime;
+                const parseTime = (t: string) => {
+                  if (t.includes("AM") || t.includes("PM")) {
+                    const [time, ampm] = t.split(" ");
+                    const [h, m] = time.split(":").map(Number);
+                    return ((h % 12) + (ampm === "PM" ? 12 : 0)) * 60 + (m || 0);
+                  }
+                  const [h, m] = t.split(":").map(Number);
+                  return h * 60 + (m || 0);
+                };
+                const mins = parseTime(last) - parseTime(first);
+                return `${(mins / 60).toFixed(1)} hrs`;
+              })()}
             </span>
           </div>
         </div>
@@ -670,7 +735,7 @@ export function ItineraryScreen({ onBack, onStartDay }: ItineraryScreenProps) {
               color: "#B0A99F",
             }}
           >
-            4 stops · Tokyo
+            {displayStops.length} stops · {trip?.destination ?? "Tokyo"}
           </span>
         </div>
 
@@ -691,7 +756,7 @@ export function ItineraryScreen({ onBack, onStartDay }: ItineraryScreenProps) {
             }}
           />
 
-          {STOPS.map((stop, index) => (
+          {displayStops.map((stop, index) => (
             <div key={stop.id} style={{ display: "flex", gap: 0, alignItems: "flex-start" }}>
               {/* Timeline node column */}
               <div
@@ -783,7 +848,7 @@ export function ItineraryScreen({ onBack, onStartDay }: ItineraryScreenProps) {
         }}
       >
         <button
-          onClick={onStartDay}
+          onClick={() => onStartDay(selectedDayIndex)}
           style={{
             width: "100%",
             background: CORAL,

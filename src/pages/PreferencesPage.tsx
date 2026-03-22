@@ -9,6 +9,7 @@ export function PreferencesPage() {
     <PreferencesScreen
       onBack={() => navigate(`/trip/${id}/results`)}
       onBuild={() => navigate(`/trip/${id}/building`)}
+      tripId={id}
     />
   );
 }

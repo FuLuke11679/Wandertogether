@@ -22,12 +22,13 @@ export function ExecutionScreen({ tripId, onHome, onViewPlan, onSalvage }: Execu
   const trip = store.getTrip(tripId);
   const execution = useTripStore((s) => s.execution);
 
-  const itinerary = trip?.itinerary ?? [];
-  const totalStops = itinerary.length;
+  const currentDay = trip?.itinerary[execution.activeDayIndex];
+  const dayStops = currentDay?.stops ?? [];
+  const totalStops = dayStops.length;
   const activeStopIndex = execution.activeStopIndex;
   const completedCount = execution.completedIds.length;
-  const activeStop = itinerary[activeStopIndex];
-  const upcomingStops = itinerary.filter(
+  const activeStop = dayStops[activeStopIndex];
+  const upcomingStops = dayStops.filter(
     (stop, i) => i > activeStopIndex && stop.status !== "skipped",
   );
 
@@ -278,7 +279,7 @@ export function ExecutionScreen({ tripId, onHome, onViewPlan, onSalvage }: Execu
 
   const handleDone = () => {
     if (doneState !== "idle") return;
-    const nextStopName = itinerary[activeStopIndex + 1]?.activity.name ?? null;
+    const nextStopName = dayStops[activeStopIndex + 1]?.activity.name ?? null;
 
     setDoneInfo({ headingTo: nextStopName });
     setDoneState("success");
@@ -433,7 +434,7 @@ export function ExecutionScreen({ tripId, onHome, onViewPlan, onSalvage }: Execu
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              {itinerary.map((stop, i) => (
+              {dayStops.map((stop, i) => (
                 <div
                   key={i}
                   style={{

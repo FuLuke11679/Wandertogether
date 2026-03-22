@@ -1,6 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { PlaceSelectionSheet } from "./PlaceSelectionSheet";
 import type { ExtractedPlace } from "../../lib/extracted-place";
+import { useTripStore } from "../../lib/store";
+import type { Activity } from "../../lib/types";
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 const CORAL = "#E85D3A";
@@ -117,21 +119,31 @@ function LinkIcon() {
   );
 }
 
+function activitiesToPlaces(activities: Activity[]): ExtractedPlace[] {
+  return activities.map((a, i) => ({
+    id: i + 1,
+    name: a.name,
+    category: a.category.charAt(0).toUpperCase() + a.category.slice(1),
+    emoji: a.emoji ?? "📍",
+    duration: `${a.estimatedDuration} min`,
+    checked: true,
+  }));
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 interface ImportScreenProps {
   onBack: () => void;
   onGoHome?: () => void;
   onContinueToVoting?: () => void;
-  /** Current trip (locks the import sheet + header subtitle) */
   tripId?: string;
   tripName?: string;
-  /** When set, Extract runs TikTok → ScrapeCreators transcript → place heuristics */
-  onExtractUrl?: (
-    rawUrl: string,
-  ) => Promise<
-    { normalizedUrl: string; places: ExtractedPlace[] } | { error: string }
-  >;
-  /** When set, called with checked places after user confirms import (store + navigate live here) */
+  /**
+   * Called when the user hits "Extract". Receives the raw URL, fetches the
+   * transcript (for TikTok) or raw content, sends it through the LLM, and
+   * returns Activity[] for the selection sheet.
+   */
+  onExtract?: (rawUrl: string) => Promise<{ activities: Activity[]; displayUrl: string }>;
+  /** Called with checked places after user confirms import */
   onImportPlaces?: (places: ExtractedPlace[]) => void;
 }
 
@@ -143,7 +155,7 @@ export function ImportScreen({
   onContinueToVoting,
   tripId,
   tripName,
-  onExtractUrl,
+  onExtract,
   onImportPlaces,
 }: ImportScreenProps) {
   const [url, setUrl]           = useState("");
@@ -161,34 +173,25 @@ export function ImportScreen({
   const handleExtract = async () => {
     if (!canExtract) return;
     setExtractError(null);
-
-    if (onExtractUrl) {
-      setLoad("loading");
-      try {
-        const result = await onExtractUrl(url.trim());
-        if ("error" in result) {
-          setExtractError(result.error);
-          setLoad("idle");
-          return;
-        }
-        setExtractedPlaces(result.places);
-        setDisplayUrl(result.normalizedUrl);
-        setLoad("done");
-        setSheet(true);
-      } catch (e) {
-        setExtractError(
-          e instanceof Error ? e.message : "Something went wrong extracting places.",
-        );
-        setLoad("idle");
-      }
-      return;
-    }
-
     setLoad("loading");
-    setTimeout(() => {
+
+    try {
+      if (onExtract) {
+        const result = await onExtract(url.trim());
+        setExtractedPlaces(activitiesToPlaces(result.activities));
+        setDisplayUrl(result.displayUrl);
+      } else {
+        setExtractedPlaces(MOCK_PLACES);
+        setDisplayUrl(url);
+      }
       setLoad("done");
       setSheet(true);
-    }, 1800);
+    } catch (e) {
+      setExtractError(
+        e instanceof Error ? e.message : "Something went wrong extracting places.",
+      );
+      setLoad("idle");
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -203,6 +206,19 @@ export function ImportScreen({
     if (onImportPlaces) {
       onImportPlaces(places);
       return;
+    }
+    if (tripId) {
+      const activities: Activity[] = places.map(p => ({
+        id: p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+        name: p.name,
+        description: "",
+        category: (p.category.toLowerCase() as Activity["category"]) || "culture",
+        estimatedDuration: parseInt(p.duration) || 60,
+        location: { lat: 0, lng: 0, neighborhood: "" },
+        emoji: p.emoji,
+        source: url,
+      }));
+      useTripStore.getState().addActivities(tripId, activities);
     }
     setTimeout(() => onContinueToVoting?.(), 200);
   };
@@ -681,7 +697,7 @@ export function ImportScreen({
       {/* ── PLACE SELECTION SHEET ── */}
       {sheetOpen && (
         <PlaceSelectionSheet
-          sourceUrl={onExtractUrl ? displayUrl : url}
+          sourceUrl={displayUrl || url}
           places={extractedPlaces ?? MOCK_PLACES}
           onClose={() => {
             setSheet(false);
