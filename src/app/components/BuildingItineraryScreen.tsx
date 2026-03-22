@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTripStore } from "../../lib/store";
 
 const CORAL = "#E85D3A";
 const SAGE  = "#2D5F4E";
@@ -53,13 +54,36 @@ const STYLES = `
 
 interface Props {
   onComplete: () => void;
+  tripId?: string;
 }
 
-export function BuildingItineraryScreen({ onComplete }: Props) {
+export function BuildingItineraryScreen({ onComplete, tripId }: Props) {
   const [phase,            setPhase]          = useState<0 | 1 | 2 | 3>(0);
   const [visibleNodes,     setVisibleNodes]   = useState<number[]>([]);
   const [visiblePriorities,setVisiblePri]     = useState<number[]>([]);
   const [progressDone,     setProgressDone]   = useState(false);
+
+  const store = useTripStore();
+  const trip = tripId ? store.getTrip(tripId) : store.getCurrentTrip();
+
+  const storePriorities = (trip?.groupPriorities ?? [])
+    .sort((a, b) => b.compositeScore - a.compositeScore)
+    .slice(0, 5)
+    .map((gp, i) => {
+      const activity = trip?.activities.find(a => a.id === gp.activityId);
+      const catEmojis: Record<string, string> = {
+        food: "🍜", culture: "⛩️", shopping: "🛍️", nature: "🌸",
+        nightlife: "🍸", adventure: "🌆",
+      };
+      return {
+        emoji: activity?.emoji ?? catEmojis[activity?.category ?? "culture"] ?? "📍",
+        name: activity?.name ?? gp.activityId,
+        category: activity?.category ? activity.category.charAt(0).toUpperCase() + activity.category.slice(1) : "Culture",
+        rank: i + 1,
+      };
+    });
+
+  const displayPriorities = storePriorities.length > 0 ? storePriorities : PRIORITIES;
 
   useEffect(() => {
     // Phase 0 → 1: initial text appears
@@ -84,7 +108,16 @@ export function BuildingItineraryScreen({ onComplete }: Props) {
       setPhase(3);
     }, 2700);
 
-    const t4 = setTimeout(() => onComplete(), 3200);
+    const t4 = setTimeout(async () => {
+      if (tripId && trip) {
+        try {
+          await store.generateLLMItinerary(tripId);
+        } catch {
+          store.loadFallbackItinerary(tripId);
+        }
+      }
+      onComplete();
+    }, 3200);
 
     return () => { clearTimeout(t0); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
   }, [onComplete]);
@@ -252,7 +285,7 @@ export function BuildingItineraryScreen({ onComplete }: Props) {
             lineHeight: 1.2,
           }}
         >
-          {phase < 3 ? "Building your perfect day…" : "Your itinerary is ready ✦"}
+          {phase < 3 ? "Building your perfect trip…" : "Your itinerary is ready ✦"}
         </h1>
         <p
           style={{
@@ -279,7 +312,7 @@ export function BuildingItineraryScreen({ onComplete }: Props) {
           marginBottom: 36,
         }}
       >
-        {PRIORITIES.map((p, i) => {
+        {displayPriorities.map((p, i) => {
           const visible = visiblePriorities.includes(i);
           return (
             <div

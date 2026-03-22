@@ -77,6 +77,11 @@ export type TripMember = {
 
 export type TripStatus = "draft" | "voting" | "planning" | "active" | "completed";
 
+export type ItineraryDay = {
+  date: string;
+  stops: ItineraryStop[];
+};
+
 export type Trip = {
   id: string;
   destination: string;
@@ -88,7 +93,7 @@ export type Trip = {
   rankings: UserRanking[];
   groupPriorities: GroupPriority[];
   preferences: TripPreferences;
-  itinerary: ItineraryStop[];
+  itinerary: ItineraryDay[];
 };
 
 export type SalvageReason = "late" | "weather" | "tired" | "other";
@@ -104,6 +109,7 @@ export type ComparisonPair = {
 };
 
 export type ExecutionState = {
+  activeDayIndex: number;
   activeStopIndex: number;
   completedIds: string[];
   skippedIds: string[];

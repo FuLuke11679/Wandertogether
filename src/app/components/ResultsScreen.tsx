@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTripStore } from "../../lib/store";
 
 const CORAL = "#E85D3A";
 const BG = "#FAFAF8";
@@ -50,11 +51,47 @@ function getBarColor(rank: number): string {
 interface ResultsScreenProps {
   onBack: () => void;
   onSetPreferences: () => void;
+  tripId?: string;
 }
 
-export function ResultsScreen({ onBack, onSetPreferences }: ResultsScreenProps) {
+export function ResultsScreen({ onBack, onSetPreferences, tripId }: ResultsScreenProps) {
   const [visible, setVisible] = useState(false);
   const [barsReady, setBarsReady] = useState(false);
+
+  const store = useTripStore();
+  const trip = tripId ? store.getTrip(tripId) : store.getCurrentTrip();
+
+  // Generate group priorities on mount if not already done
+  useEffect(() => {
+    if (trip && trip.groupPriorities.length === 0 && trip.rankings.length > 0) {
+      store.generateGroupPriorities(trip.id);
+    }
+  }, [trip?.id]);
+
+  // Derive ranked activities from store data
+  const storeRankedActivities: RankedActivity[] = (trip?.groupPriorities ?? [])
+    .sort((a, b) => b.compositeScore - a.compositeScore)
+    .map((gp, i) => {
+      const activity = trip?.activities.find(a => a.id === gp.activityId);
+      return {
+        rank: i + 1,
+        name: activity?.name ?? gp.activityId,
+        category: activity?.category ? activity.category.charAt(0).toUpperCase() + activity.category.slice(1) : "Culture",
+        emoji: activity?.emoji ?? "📍",
+        score: Math.round(gp.compositeScore),
+        votes: gp.individualRanks.map((_, idx) => idx + 1),
+      };
+    });
+
+  const displayActivities = storeRankedActivities.length > 0 ? storeRankedActivities : RANKED_ACTIVITIES;
+
+  const storeAvatars = (trip?.members ?? []).map((m, i) => ({
+    initials: m.initials,
+    bg: ["#E8C4A0", "#B8D4B0", "#C4B4D8", "#E8D8A0", "#D4E8F5"][i % 5],
+    text: ["#8A5A30", "#2D6B3A", "#5A4D8A", "#8A6A20", "#1E5A8A"][i % 5],
+  }));
+
+  const displayAvatars = storeAvatars.length > 0 ? storeAvatars : AVATARS;
 
   useEffect(() => {
     // Trigger row entrance immediately
@@ -175,12 +212,12 @@ export function ResultsScreen({ onBack, onSetPreferences }: ResultsScreenProps) 
             fontWeight: 400,
           }}
         >
-          Based on 4 members' preferences
+          Based on {displayAvatars.length} members' preferences
         </p>
 
         {/* Avatar stack */}
         <div className="flex items-center gap-0">
-          {AVATARS.map((av, i) => (
+          {displayAvatars.map((av, i) => (
             <div
               key={i}
               style={{
@@ -193,7 +230,7 @@ export function ResultsScreen({ onBack, onSetPreferences }: ResultsScreenProps) 
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                zIndex: AVATARS.length - i,
+                zIndex: displayAvatars.length - i,
                 position: "relative",
               }}
             >
@@ -232,7 +269,7 @@ export function ResultsScreen({ onBack, onSetPreferences }: ResultsScreenProps) 
         className="flex-1 overflow-y-auto"
         style={{ paddingBottom: 100 }}
       >
-        {RANKED_ACTIVITIES.map((activity, index) => {
+        {displayActivities.map((activity, index) => {
           const catColors = CATEGORY_COLORS[activity.category] ?? { bg: "#F5F3F0", text: "#666" };
           const barColor = getBarColor(activity.rank);
           const isTopRank = activity.rank <= 3;
@@ -255,7 +292,7 @@ export function ResultsScreen({ onBack, onSetPreferences }: ResultsScreenProps) 
                 style={{
                   paddingTop: 14,
                   paddingBottom: 14,
-                  borderBottom: index < RANKED_ACTIVITIES.length - 1 ? "1px solid #F0EDE8" : "none",
+                  borderBottom: index < displayActivities.length - 1 ? "1px solid #F0EDE8" : "none",
                   gap: 14,
                 }}
               >
@@ -349,7 +386,7 @@ export function ResultsScreen({ onBack, onSetPreferences }: ResultsScreenProps) 
 
                   {/* Vote dots */}
                   <div className="flex items-center gap-1" style={{ marginTop: 5 }}>
-                    {AVATARS.map((av, i) => {
+                    {displayAvatars.map((av, i) => {
                       const voted = activity.votes.includes(i + 1);
                       return (
                         <div
@@ -374,7 +411,7 @@ export function ResultsScreen({ onBack, onSetPreferences }: ResultsScreenProps) 
                         marginLeft: 3,
                       }}
                     >
-                      {activity.votes.length}/{AVATARS.length} chose this
+                      {activity.votes.length}/{displayAvatars.length} chose this
                     </span>
                   </div>
                 </div>
@@ -411,7 +448,7 @@ export function ResultsScreen({ onBack, onSetPreferences }: ResultsScreenProps) 
           style={{
             padding: "16px 20px 0",
             opacity: visible ? 1 : 0,
-            transition: `opacity 0.5s ease ${RANKED_ACTIVITIES.length * 0.07 + 0.2}s`,
+            transition: `opacity 0.5s ease ${displayActivities.length * 0.07 + 0.2}s`,
           }}
         >
           <p

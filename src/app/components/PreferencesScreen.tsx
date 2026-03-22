@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useTripStore } from "../../lib/store";
+import type { Pace, WalkingTolerance, Budget, ActivityCategory } from "../../lib/types";
 
 const CORAL = "#E85D3A";
 const BG = "#FAFAF8";
@@ -166,9 +168,10 @@ function ThreeCardRow<T extends string>({ value, onChange, options }: ThreeCardR
 interface PreferencesScreenProps {
   onBack: () => void;
   onBuild: () => void;
+  tripId?: string;
 }
 
-export function PreferencesScreen({ onBack, onBuild }: PreferencesScreenProps) {
+export function PreferencesScreen({ onBack, onBuild, tripId }: PreferencesScreenProps) {
   const [pace, setPace] = useState<"chill" | "balanced" | "intense">("balanced");
   const [walking, setWalking] = useState<"taxi" | "some" | "anywhere">("some");
   const [focusAreas, setFocusAreas] = useState<Set<string>>(new Set(["Food", "Culture"]));
@@ -177,6 +180,8 @@ export function PreferencesScreen({ onBack, onBuild }: PreferencesScreenProps) {
   const [budget, setBudget] = useState<"budget" | "moderate" | "splurge">("moderate");
   const [visible, setVisible] = useState(false);
   const [pressedTime, setPressedTime] = useState<"start" | "end" | null>(null);
+
+  const store = useTripStore();
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 60);
@@ -594,7 +599,26 @@ export function PreferencesScreen({ onBack, onBuild }: PreferencesScreenProps) {
         </p>
 
         <button
-          onClick={onBuild}
+          onClick={() => {
+            const paceMap: Record<string, Pace> = { chill: "relaxed", balanced: "moderate", intense: "packed" };
+            const walkMap: Record<string, WalkingTolerance> = { taxi: "minimal", some: "moderate", anywhere: "explorer" };
+            const budgetMap: Record<string, Budget> = { budget: "low", moderate: "medium", splurge: "high" };
+            const startH = parseInt(START_TIMES[startTimeIdx].split(":")[0]);
+            const startAmPm = START_TIMES[startTimeIdx].includes("PM") ? 12 : 0;
+            const endH = parseInt(END_TIMES[endTimeIdx].split(":")[0]);
+            const endAmPm = END_TIMES[endTimeIdx].includes("PM") ? 12 : 0;
+            if (tripId) {
+              store.setPreferences(tripId, {
+                pace: paceMap[pace] ?? "moderate",
+                walkingTolerance: walkMap[walking] ?? "moderate",
+                budget: budgetMap[budget] ?? "medium",
+                priorities: Array.from(focusAreas).map(f => f.toLowerCase() as ActivityCategory),
+                startTime: `${String(startH + startAmPm).padStart(2, "0")}:00`,
+                endTime: `${String(endH + endAmPm).padStart(2, "0")}:00`,
+              });
+            }
+            onBuild();
+          }}
           style={{
             width: "100%",
             background: CORAL,

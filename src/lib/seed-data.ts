@@ -5,6 +5,7 @@ import type {
   UserRanking,
   GroupPriority,
   ItineraryStop,
+  ItineraryDay,
   TripPreferences,
   SalvageResult,
 } from "./types";
@@ -278,62 +279,39 @@ function act(id: string): Activity {
   return SEED_ACTIVITIES.find((a) => a.id === id)!;
 }
 
-export const FALLBACK_ITINERARY: ItineraryStop[] = [
+export const FALLBACK_ITINERARY: ItineraryDay[] = [
   {
-    activity: act("tsukiji"),
-    startTime: "09:00",
-    endTime: "10:30",
-    travelToNext: { duration: 12, mode: "transit" },
-    priority: 1,
-    status: "upcoming",
+    date: "2026-03-22",
+    stops: [
+      { activity: act("tsukiji"), startTime: "09:00", endTime: "10:30", travelToNext: { duration: 12, mode: "transit" }, priority: 1, status: "upcoming" },
+      { activity: act("sensoji"), startTime: "10:45", endTime: "12:00", travelToNext: { duration: 8, mode: "walk" }, priority: 2, status: "upcoming" },
+      { activity: act("teamlab"), startTime: "12:30", endTime: "14:30", travelToNext: { duration: 18, mode: "transit" }, priority: 3, status: "upcoming" },
+      { activity: act("meiji"), startTime: "15:00", endTime: "16:00", travelToNext: { duration: 10, mode: "walk" }, priority: 4, status: "upcoming" },
+      { activity: act("shibuya-crossing"), startTime: "16:15", endTime: "16:45", travelToNext: { duration: 5, mode: "walk" }, priority: 5, status: "upcoming" },
+      { activity: act("ichiran"), startTime: "17:00", endTime: "17:45", travelToNext: { duration: 15, mode: "transit" }, priority: 6, status: "upcoming" },
+      { activity: act("golden-gai"), startTime: "19:00", endTime: "21:00", travelToNext: { duration: 0, mode: "walk" }, priority: 7, status: "upcoming" },
+    ],
   },
   {
-    activity: act("sensoji"),
-    startTime: "10:45",
-    endTime: "12:00",
-    travelToNext: { duration: 8, mode: "walk" },
-    priority: 2,
-    status: "upcoming",
+    date: "2026-03-23",
+    stops: [
+      { activity: act("shinjuku-gyoen"), startTime: "09:00", endTime: "10:30", travelToNext: { duration: 15, mode: "walk" }, priority: 1, status: "upcoming" },
+      { activity: act("takeshita"), startTime: "10:45", endTime: "11:45", travelToNext: { duration: 10, mode: "walk" }, priority: 2, status: "upcoming" },
+      { activity: act("afuri"), startTime: "12:00", endTime: "12:45", travelToNext: { duration: 20, mode: "transit" }, priority: 3, status: "upcoming" },
+      { activity: act("ueno-park"), startTime: "13:10", endTime: "14:10", travelToNext: { duration: 12, mode: "transit" }, priority: 4, status: "upcoming" },
+      { activity: act("akihabara"), startTime: "14:25", endTime: "15:40", travelToNext: { duration: 15, mode: "transit" }, priority: 5, status: "upcoming" },
+      { activity: act("skytree"), startTime: "16:00", endTime: "17:00", travelToNext: { duration: 10, mode: "transit" }, priority: 6, status: "upcoming" },
+      { activity: act("robot-restaurant"), startTime: "19:00", endTime: "20:30", travelToNext: { duration: 0, mode: "walk" }, priority: 7, status: "upcoming" },
+    ],
   },
   {
-    activity: act("teamlab"),
-    startTime: "12:30",
-    endTime: "14:30",
-    travelToNext: { duration: 18, mode: "transit" },
-    priority: 3,
-    status: "upcoming",
-  },
-  {
-    activity: act("meiji"),
-    startTime: "15:00",
-    endTime: "16:00",
-    travelToNext: { duration: 10, mode: "walk" },
-    priority: 4,
-    status: "upcoming",
-  },
-  {
-    activity: act("shibuya-crossing"),
-    startTime: "16:15",
-    endTime: "16:45",
-    travelToNext: { duration: 5, mode: "walk" },
-    priority: 5,
-    status: "upcoming",
-  },
-  {
-    activity: act("ichiran"),
-    startTime: "17:00",
-    endTime: "17:45",
-    travelToNext: { duration: 15, mode: "transit" },
-    priority: 6,
-    status: "upcoming",
-  },
-  {
-    activity: act("golden-gai"),
-    startTime: "19:00",
-    endTime: "21:00",
-    travelToNext: { duration: 0, mode: "walk" },
-    priority: 7,
-    status: "upcoming",
+    date: "2026-03-24",
+    stops: [
+      { activity: act("nakamise"), startTime: "09:30", endTime: "10:15", travelToNext: { duration: 8, mode: "walk" }, priority: 1, status: "upcoming" },
+      { activity: act("sensoji"), startTime: "10:25", endTime: "11:15", travelToNext: { duration: 25, mode: "transit" }, priority: 2, status: "upcoming" },
+      { activity: act("shibuya-crossing"), startTime: "11:45", endTime: "12:15", travelToNext: { duration: 5, mode: "walk" }, priority: 3, status: "upcoming" },
+      { activity: act("ichiran"), startTime: "12:20", endTime: "13:05", travelToNext: { duration: 0, mode: "walk" }, priority: 4, status: "upcoming" },
+    ],
   },
 ];
 

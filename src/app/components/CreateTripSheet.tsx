@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTripStore } from "../../lib/store";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const CORAL = "#E85D3A";
@@ -77,7 +78,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ─── Main Sheet ───────────────────────────────────────────────────────────────
 interface CreateTripSheetProps {
   onClose: () => void;
-  onCreate: () => void;
+  onCreate: (tripId: string) => void;
 }
 
 export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
@@ -89,6 +90,7 @@ export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
   const [copyPressed,   setCopyPressed]   = useState(false);
   const [members,  setMembers]   = useState(MEMBERS);
   const inputRef = useRef<HTMLInputElement>(null);
+  const store = useTripStore();
 
   // Slide in on mount
   useEffect(() => {
@@ -108,9 +110,25 @@ export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
 
   const handleCreate = () => {
     setCreatePressed(true);
+    const startDate = "2026-03-22";
+    const endDate = "2026-03-26";
+    const tripId = store.createTrip(destVal.split(",")[0].trim(), { start: startDate, end: endDate });
+    members.filter(m => !m.isYou).forEach((m) => {
+      const trips = useTripStore.getState().trips;
+      const trip = trips.find(t => t.id === tripId);
+      if (trip && !trip.members.some(mem => mem.name === m.name)) {
+        useTripStore.setState(s => ({
+          trips: s.trips.map(t =>
+            t.id === tripId
+              ? { ...t, members: [...t.members, { id: m.name.toLowerCase(), name: m.name, initials: m.initial }] }
+              : t
+          ),
+        }));
+      }
+    });
     setTimeout(() => {
       setSheetIn(false);
-      setTimeout(onCreate, 380);
+      setTimeout(() => onCreate(tripId), 380);
     }, 160);
   };
 

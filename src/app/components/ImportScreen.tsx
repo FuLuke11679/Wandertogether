@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { PlaceSelectionSheet, type ExtractedPlace } from "./PlaceSelectionSheet";
+import { useTripStore } from "../../lib/store";
+import { extractActivities } from "../../lib/llm/extract-activities";
+import type { Activity } from "../../lib/types";
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 const CORAL = "#E85D3A";
@@ -121,39 +124,57 @@ interface ImportScreenProps {
   onBack: () => void;
   onGoHome?: () => void;
   onContinueToVoting?: () => void;
+  tripId?: string;
+  tripName?: string;
 }
 
 type LoadState = "idle" | "loading" | "done";
 
-export function ImportScreen({ onBack, onGoHome, onContinueToVoting }: ImportScreenProps) {
+export function ImportScreen({ onBack, onGoHome, onContinueToVoting, tripId, tripName }: ImportScreenProps) {
   const [url, setUrl]           = useState("");
   const [loadState, setLoad]    = useState<LoadState>("idle");
   const [sheetOpen, setSheet]   = useState(false);
   const [manualOpen, setManual] = useState(false);
   const [manualName, setMName]  = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [extractedActivities, setExtractedActivities] = useState<Activity[]>([]);
 
   const canExtract = url.trim().length > 4;
 
-  const handleExtract = () => {
+  const handleExtract = async () => {
     if (!canExtract) return;
     setLoad("loading");
-    // Simulate backend extraction (1.8s)
-    setTimeout(() => {
+    try {
+      const result = await extractActivities(url, url);
+      setExtractedActivities(result.activities);
       setLoad("done");
       setSheet(true);
-    }, 1800);
+    } catch {
+      setLoad("idle");
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleExtract();
   };
 
-  const handleImport = (places: ExtractedPlace[], tripId: string) => {
+  const handleImport = (places: ExtractedPlace[], selectedTripId: string) => {
+    if (tripId) {
+      const activities: Activity[] = places.map(p => ({
+        id: p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+        name: p.name,
+        description: "",
+        category: (p.category.toLowerCase() as Activity["category"]) || "culture",
+        estimatedDuration: parseInt(p.duration) || 60,
+        location: { lat: 0, lng: 0, neighborhood: "" },
+        emoji: p.emoji,
+        source: url,
+      }));
+      useTripStore.getState().addActivities(tripId, activities);
+    }
     setSheet(false);
     setLoad("idle");
     setUrl("");
-    // After import, give a brief moment then navigate to voting
     setTimeout(() => onContinueToVoting?.(), 200);
   };
 
@@ -223,7 +244,7 @@ export function ImportScreen({ onBack, onGoHome, onContinueToVoting }: ImportScr
           Add Places
         </h1>
         <span style={{ fontSize: 12, color: "#A09888", marginTop: 3 }}>
-          Tokyo Adventure
+          {tripName ?? "Tokyo Adventure"}
         </span>
       </div>
 
@@ -609,7 +630,14 @@ export function ImportScreen({ onBack, onGoHome, onContinueToVoting }: ImportScr
       {sheetOpen && (
         <PlaceSelectionSheet
           sourceUrl={url}
-          places={MOCK_PLACES}
+          places={extractedActivities.length > 0 ? extractedActivities.map((a, i) => ({
+            id: i + 1,
+            name: a.name,
+            category: (a.category.charAt(0).toUpperCase() + a.category.slice(1)),
+            emoji: a.emoji ?? "📍",
+            duration: `${a.estimatedDuration} min`,
+            checked: true,
+          })) : MOCK_PLACES}
           onClose={() => { setSheet(false); setLoad("idle"); }}
           onImport={handleImport}
         />

@@ -9,6 +9,7 @@ export function ResultsPage() {
     <ResultsScreen
       onBack={() => navigate(`/trip/${id}/vote`)}
       onSetPreferences={() => navigate(`/trip/${id}/preferences`)}
+      tripId={id}
     />
   );
 }

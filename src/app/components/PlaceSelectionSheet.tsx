@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTripStore } from "../../lib/store";
 
 const CORAL = "#E85D3A";
 const SAGE  = "#2D5F4E";
@@ -28,12 +29,19 @@ interface Props {
   onImport: (places: ExtractedPlace[], tripId: string) => void;
 }
 
-// ─── Mock trips ───────────────────────────────────────────────────────────────
-const TRIPS: Trip[] = [
-  { id: "tokyo",  name: "Tokyo Adventure",  emoji: "🗼", dates: "Apr 12–19" },
-  { id: "bali",   name: "Bali Escape",       emoji: "🌴", dates: "Jun 3–10"  },
-  { id: "paris",  name: "Paris Weekend",     emoji: "🥐", dates: "Aug 22–25" },
-];
+// ─── Trips from store ─────────────────────────────────────────────────────────
+function useTrips(): Trip[] {
+  const storeTrips = useTripStore((s) => s.trips);
+  if (storeTrips.length === 0) {
+    return [{ id: "tokyo", name: "Tokyo Adventure", emoji: "🗼", dates: "Mar 22–26" }];
+  }
+  return storeTrips.map((t) => ({
+    id: t.id,
+    name: `${t.destination} Adventure`,
+    emoji: t.destination === "Tokyo" ? "🗼" : "✈️",
+    dates: `${new Date(t.dates.start).toLocaleDateString("en-US", { month: "short", day: "numeric" })}–${new Date(t.dates.end).toLocaleDateString("en-US", { day: "numeric" })}`,
+  }));
+}
 
 // ─── Category color map ───────────────────────────────────────────────────────
 const CAT: Record<string, { bg: string; text: string }> = {
@@ -111,6 +119,7 @@ function Checkbox({ checked, onChange }: { checked: boolean; onChange: () => voi
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export function PlaceSelectionSheet({ sourceUrl, places: initialPlaces, onClose, onImport }: Props) {
+  const TRIPS = useTrips();
   const [places, setPlaces]         = useState(initialPlaces);
   const [selectedTrip, setTrip]     = useState<Trip>(TRIPS[0]);
   const [tripPickerOpen, setTripPicker] = useState(false);
