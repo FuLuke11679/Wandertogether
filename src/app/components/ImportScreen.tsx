@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { PlaceSelectionSheet, type ExtractedPlace } from "./PlaceSelectionSheet";
+import { PlaceSelectionSheet } from "./PlaceSelectionSheet";
+import type { ExtractedPlace } from "../../lib/extracted-place";
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 const CORAL = "#E85D3A";
@@ -121,24 +122,69 @@ interface ImportScreenProps {
   onBack: () => void;
   onGoHome?: () => void;
   onContinueToVoting?: () => void;
+  /** Current trip (locks the import sheet + header subtitle) */
+  tripId?: string;
+  tripName?: string;
+  /** When set, Extract runs TikTok → ScrapeCreators transcript → place heuristics */
+  onExtractUrl?: (
+    rawUrl: string,
+  ) => Promise<
+    { normalizedUrl: string; places: ExtractedPlace[] } | { error: string }
+  >;
+  /** When set, called with checked places after user confirms import (store + navigate live here) */
+  onImportPlaces?: (places: ExtractedPlace[]) => void;
 }
 
 type LoadState = "idle" | "loading" | "done";
 
-export function ImportScreen({ onBack, onGoHome, onContinueToVoting }: ImportScreenProps) {
+export function ImportScreen({
+  onBack,
+  onGoHome,
+  onContinueToVoting,
+  tripId,
+  tripName,
+  onExtractUrl,
+  onImportPlaces,
+}: ImportScreenProps) {
   const [url, setUrl]           = useState("");
   const [loadState, setLoad]    = useState<LoadState>("idle");
   const [sheetOpen, setSheet]   = useState(false);
   const [manualOpen, setManual] = useState(false);
   const [manualName, setMName]  = useState("");
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractedPlaces, setExtractedPlaces] = useState<ExtractedPlace[] | null>(null);
+  const [displayUrl, setDisplayUrl] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const canExtract = url.trim().length > 4;
 
-  const handleExtract = () => {
+  const handleExtract = async () => {
     if (!canExtract) return;
+    setExtractError(null);
+
+    if (onExtractUrl) {
+      setLoad("loading");
+      try {
+        const result = await onExtractUrl(url.trim());
+        if ("error" in result) {
+          setExtractError(result.error);
+          setLoad("idle");
+          return;
+        }
+        setExtractedPlaces(result.places);
+        setDisplayUrl(result.normalizedUrl);
+        setLoad("done");
+        setSheet(true);
+      } catch (e) {
+        setExtractError(
+          e instanceof Error ? e.message : "Something went wrong extracting places.",
+        );
+        setLoad("idle");
+      }
+      return;
+    }
+
     setLoad("loading");
-    // Simulate backend extraction (1.8s)
     setTimeout(() => {
       setLoad("done");
       setSheet(true);
@@ -149,11 +195,15 @@ export function ImportScreen({ onBack, onGoHome, onContinueToVoting }: ImportScr
     if (e.key === "Enter") handleExtract();
   };
 
-  const handleImport = (places: ExtractedPlace[], tripId: string) => {
+  const handleImport = (places: ExtractedPlace[], _tripIdFromSheet: string) => {
     setSheet(false);
     setLoad("idle");
     setUrl("");
-    // After import, give a brief moment then navigate to voting
+    setExtractedPlaces(null);
+    if (onImportPlaces) {
+      onImportPlaces(places);
+      return;
+    }
     setTimeout(() => onContinueToVoting?.(), 200);
   };
 
@@ -223,7 +273,7 @@ export function ImportScreen({ onBack, onGoHome, onContinueToVoting }: ImportScr
           Add Places
         </h1>
         <span style={{ fontSize: 12, color: "#A09888", marginTop: 3 }}>
-          Tokyo Adventure
+          {tripName ?? "Tokyo Adventure"}
         </span>
       </div>
 
@@ -277,7 +327,11 @@ export function ImportScreen({ onBack, onGoHome, onContinueToVoting }: ImportScr
               ref={inputRef}
               className="imp-input"
               value={url}
-              onChange={e => { setUrl(e.target.value); if (loadState !== "idle") setLoad("idle"); }}
+              onChange={e => {
+                setUrl(e.target.value);
+                if (loadState !== "idle") setLoad("idle");
+                setExtractError(null);
+              }}
               onKeyDown={handleKeyDown}
               placeholder="Paste a link and hit Extract…"
               style={{
@@ -334,6 +388,25 @@ export function ImportScreen({ onBack, onGoHome, onContinueToVoting }: ImportScr
             )}
           </button>
         </div>
+
+        {extractError && (
+          <div
+            className="imp-fadeup"
+            style={{
+              marginBottom: 16,
+              padding: "10px 12px",
+              background: "#FFF0EB",
+              border: "1px solid #F0C9BC",
+              borderRadius: 12,
+              fontFamily: "'Inter', sans-serif",
+              fontSize: 12.5,
+              color: "#8B3D2E",
+              lineHeight: 1.45,
+            }}
+          >
+            {extractError}
+          </div>
+        )}
 
         {/* ── LOADING SKELETON CARD (while processing) ── */}
         {loadState === "loading" && (
@@ -608,10 +681,16 @@ export function ImportScreen({ onBack, onGoHome, onContinueToVoting }: ImportScr
       {/* ── PLACE SELECTION SHEET ── */}
       {sheetOpen && (
         <PlaceSelectionSheet
-          sourceUrl={url}
-          places={MOCK_PLACES}
-          onClose={() => { setSheet(false); setLoad("idle"); }}
+          sourceUrl={onExtractUrl ? displayUrl : url}
+          places={extractedPlaces ?? MOCK_PLACES}
+          onClose={() => {
+            setSheet(false);
+            setLoad("idle");
+            setExtractedPlaces(null);
+          }}
           onImport={handleImport}
+          lockedTripId={tripId}
+          lockedTripName={tripName}
         />
       )}
     </div>

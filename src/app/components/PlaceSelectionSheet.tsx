@@ -1,18 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import type { ExtractedPlace } from "../../lib/extracted-place";
+
+export type { ExtractedPlace };
 
 const CORAL = "#E85D3A";
 const SAGE  = "#2D5F4E";
 const DARK  = "#1A1A1A";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-export interface ExtractedPlace {
-  id: number;
-  name: string;
-  category: string;
-  emoji: string;
-  duration: string;
-  checked: boolean;
-}
 
 interface Trip {
   id: string;
@@ -26,6 +19,10 @@ interface Props {
   places: ExtractedPlace[];
   onClose: () => void;
   onImport: (places: ExtractedPlace[], tripId: string) => void;
+  /** When set, trip picker is hidden and imports target this trip */
+  lockedTripId?: string;
+  lockedTripName?: string;
+  lockedTripEmoji?: string;
 }
 
 // ─── Mock trips ───────────────────────────────────────────────────────────────
@@ -110,7 +107,15 @@ function Checkbox({ checked, onChange }: { checked: boolean; onChange: () => voi
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function PlaceSelectionSheet({ sourceUrl, places: initialPlaces, onClose, onImport }: Props) {
+export function PlaceSelectionSheet({
+  sourceUrl,
+  places: initialPlaces,
+  onClose,
+  onImport,
+  lockedTripId,
+  lockedTripName,
+  lockedTripEmoji,
+}: Props) {
   const [places, setPlaces]         = useState(initialPlaces);
   const [selectedTrip, setTrip]     = useState<Trip>(TRIPS[0]);
   const [tripPickerOpen, setTripPicker] = useState(false);
@@ -118,6 +123,17 @@ export function PlaceSelectionSheet({ sourceUrl, places: initialPlaces, onClose,
   const [imported, setImported]     = useState(false);
 
   const checkedCount = places.filter(p => p.checked).length;
+
+  useEffect(() => {
+    if (lockedTripId && lockedTripName) {
+      setTrip({
+        id: lockedTripId,
+        name: lockedTripName,
+        emoji: lockedTripEmoji ?? "🗺️",
+        dates: "",
+      });
+    }
+  }, [lockedTripId, lockedTripName, lockedTripEmoji]);
 
   const dismiss = () => {
     setExiting(true);
@@ -135,7 +151,10 @@ export function PlaceSelectionSheet({ sourceUrl, places: initialPlaces, onClose,
   const handleImport = () => {
     setImported(true);
     setTimeout(() => {
-      onImport(places.filter(p => p.checked), selectedTrip.id);
+      onImport(
+        places.filter((p) => p.checked),
+        lockedTripId ?? selectedTrip.id,
+      );
       dismiss();
     }, 900);
   };
@@ -233,6 +252,24 @@ export function PlaceSelectionSheet({ sourceUrl, places: initialPlaces, onClose,
             <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 11.5, color: "#A09888", fontWeight: 500, letterSpacing: "0.04em", textTransform: "uppercase" as const }}>
               Adding to
             </span>
+            {lockedTripId ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  background: "white",
+                  border: "1.5px solid #EDE9E4",
+                  borderRadius: 10,
+                  padding: "7px 11px",
+                }}
+              >
+                <span style={{ fontSize: 15 }}>{selectedTrip.emoji}</span>
+                <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, color: DARK }}>
+                  {selectedTrip.name}
+                </span>
+              </div>
+            ) : (
             <button
               onClick={() => setTripPicker(v => !v)}
               style={{
@@ -258,10 +295,11 @@ export function PlaceSelectionSheet({ sourceUrl, places: initialPlaces, onClose,
                 <path d="M3.5 5.5l3.5 3.5 3.5-3.5" stroke="#A09888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </button>
+            )}
           </div>
 
           {/* Trip dropdown */}
-          {tripPickerOpen && (
+          {!lockedTripId && tripPickerOpen && (
             <div
               className="trip-expand"
               style={{

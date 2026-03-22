@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { tiktokTranscriptApiPlugin } from './vite-plugin-tiktok-transcript-api'
 
 export default defineConfig({
   plugins: [
@@ -9,6 +10,8 @@ export default defineConfig({
     // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),
+    /** POST /api/tiktok/transcript — proxies to ScrapeCreators with SCRAPECREATORS_API_KEY (dev + vite preview only). */
+    tiktokTranscriptApiPlugin(),
   ],
   resolve: {
     alias: {
