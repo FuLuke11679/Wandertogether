@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
+import { parseMapLatLng } from "../../lib/geo";
 import { useTripStore } from "../../lib/store";
 import { SEED_TRIP } from "../../lib/seed-data";
+import type { ItineraryStop } from "../../lib/types";
 
 const CORAL = "#E85D3A";
 const BG = "#FAFAF8";
@@ -247,7 +249,13 @@ function TokyoMap() {
   );
 }
 
-function TripMapPlaceholder({ destination }: { destination: string }) {
+function TripMapPlaceholder({
+  destination,
+  hint,
+}: {
+  destination: string;
+  hint?: string;
+}) {
   return (
     <div
       style={{
@@ -281,9 +289,134 @@ function TripMapPlaceholder({ destination }: { destination: string }) {
           lineHeight: 1.45,
         }}
       >
-        Build your itinerary to see stops on the map
+        {hint ??
+          "Build your itinerary to see stops on the map"}
       </p>
     </div>
+  );
+}
+
+/** Live map from Google Static Maps API (coordinates from the current day’s activities). */
+function DayRouteMap({
+  stops,
+  destination,
+  showTokyoSeedDemo,
+}: {
+  stops: ItineraryStop[];
+  destination: string;
+  showTokyoSeedDemo: boolean;
+}) {
+  const [imgError, setImgError] = useState(false);
+
+  const routeKey = stops.map((s) => s.activity.id).join(",");
+  useEffect(() => {
+    setImgError(false);
+  }, [routeKey]);
+
+  if (showTokyoSeedDemo) {
+    return <TokyoMap />;
+  }
+
+  if (stops.length === 0) {
+    return (
+      <TripMapPlaceholder
+        destination={destination}
+        hint="No stops on this day — pick another day above."
+      />
+    );
+  }
+
+  const coords = stops
+    .map((s) => parseMapLatLng(s.activity.location?.lat, s.activity.location?.lng))
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
+  const qs = coords.map((c) => `${c.lat},${c.lng}`).join("|");
+
+  if (coords.length === 0) {
+    return (
+      <TripMapPlaceholder
+        destination={destination}
+        hint="Stops don’t have usable map pins yet (missing or 0,0 coordinates). Re-import places with the API server + GOOGLE_MAPS_API_KEY running so Geocoding can run."
+      />
+    );
+  }
+
+  if (imgError) {
+    return (
+      <TripMapPlaceholder
+        destination={destination}
+        hint="Couldn’t load the map preview. Enable Maps Static API on your Google Cloud key and keep npm run dev:all running so /api proxies to the server."
+      />
+    );
+  }
+
+  const mapSrc = `/api/itinerary-static-map?p=${encodeURIComponent(qs)}`;
+  return (
+    <img
+      src={mapSrc}
+      alt={`Route map — ${destination}`}
+      width={390}
+      height={270}
+      style={{
+        display: "block",
+        width: 390,
+        height: 270,
+        objectFit: "cover",
+      }}
+      onLoad={() => {
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "3d958d",
+            },
+            body: JSON.stringify({
+              sessionId: "3d958d",
+              location: "ItineraryScreen.tsx:DayRouteMap:img:onLoad",
+              message: "static map image decoded OK",
+              data: { coordsCount: coords.length },
+              timestamp: Date.now(),
+              hypothesisId: "verify",
+              runId: "post-fix",
+            }),
+          },
+        ).catch(() => {});
+        // #endregion
+      }}
+      onError={(e) => {
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "3d958d",
+            },
+            body: JSON.stringify({
+              sessionId: "3d958d",
+              location: "ItineraryScreen.tsx:DayRouteMap:img:onError",
+              message: "browser failed to load static map image",
+              data: {
+                currentSrc: (e.currentTarget as HTMLImageElement).currentSrc?.slice(
+                  0,
+                  180,
+                ),
+                coordsCount: coords.length,
+              },
+              timestamp: Date.now(),
+              hypothesisId: "H-B",
+              runId: "pre-fix",
+            }),
+          },
+        ).catch(() => {});
+        // #endregion
+        setImgError(true);
+      }}
+    />
   );
 }
 
@@ -732,7 +865,11 @@ export function ItineraryScreen({ onBack, onStartDay, tripId }: ItineraryScreenP
           overflow: "hidden",
         }}
       >
-        <TokyoMap />
+        <DayRouteMap
+          stops={currentDayStops}
+          destination={trip?.destination ?? "Your trip"}
+          showTokyoSeedDemo={useSeedTokyoDemo}
+        />
       </div>
 
       {/* ── SCROLLABLE TIMELINE ── */}

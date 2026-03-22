@@ -7,6 +7,17 @@ import {
   ADAPT_TRIP_SYSTEM,
 } from "./prompts";
 import { fetchTikTokTranscriptV1 } from "../src/lib/scrapecreators-v1";
+import { isValidMapCoordinate } from "../src/lib/geo";
+import {
+  enrichItineraryTravelTimes,
+  enrichRawActivitiesWithGeocode,
+  fetchItineraryStaticMapPng,
+  geocodePlaceInDestination,
+  geocodeQuery,
+  getGoogleMapsApiKey,
+  type ItineraryDayLike,
+  type TransitModeHint,
+} from "./google-maps";
 
 const app = express();
 app.use(cors());
@@ -28,10 +39,199 @@ function tryParseJson(text: string): unknown {
   return JSON.parse(cleaned);
 }
 
+// ── Root (browser often opens http://localhost:3001/ — this is API-only) ─────
+
+app.get("/", (_req, res) => {
+  res.json({
+    service: "WanderTogether API",
+    ok: true,
+    hint: "This server exposes /api/* only. Run the app UI with `npm run dev` (Vite, usually http://localhost:5173).",
+    try: "/api/health",
+  });
+});
+
 // ── Health ───────────────────────────────────────────────────────────────────
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, hasKey: !!getClient() });
+});
+
+// ── Itinerary map (Google Static Maps — proxied so API key stays on server) ──
+
+app.get("/api/itinerary-static-map", async (req, res) => {
+  const raw = req.query.p;
+  // #region agent log
+  fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "3d958d",
+    },
+    body: JSON.stringify({
+      sessionId: "3d958d",
+      location: "server/index.ts:itinerary-static-map:entry",
+      message: "static map request received",
+      data: {
+        pType: typeof raw,
+        pLen: typeof raw === "string" ? raw.length : 0,
+      },
+      timestamp: Date.now(),
+      hypothesisId: "H-B,H-C",
+      runId: "pre-fix",
+    }),
+  }).catch(() => {});
+  // #endregion
+  if (typeof raw !== "string" || !raw.trim()) {
+    // #region agent log
+    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "3d958d",
+      },
+      body: JSON.stringify({
+        sessionId: "3d958d",
+        location: "server/index.ts:itinerary-static-map:400",
+        message: "missing p query",
+        data: {},
+        timestamp: Date.now(),
+        hypothesisId: "H-C",
+        runId: "pre-fix",
+      }),
+    }).catch(() => {});
+    // #endregion
+    res.status(400).send("Missing or invalid p= query (lat,lng|lat,lng|…)");
+    return;
+  }
+
+  const points: { lat: number; lng: number }[] = [];
+  for (const seg of raw.split("|")) {
+    const chunk = seg.trim();
+    if (!chunk) continue;
+    const parts = chunk.split(",").map((s) => parseFloat(s.trim()));
+    if (
+      parts.length >= 2 &&
+      isValidMapCoordinate(parts[0], parts[1])
+    ) {
+      points.push({ lat: parts[0], lng: parts[1] });
+    }
+  }
+
+  if (points.length === 0) {
+    // #region agent log
+    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "3d958d",
+      },
+      body: JSON.stringify({
+        sessionId: "3d958d",
+        location: "server/index.ts:itinerary-static-map:404",
+        message: "no valid points after parse",
+        data: { rawSegCount: raw.split("|").length },
+        timestamp: Date.now(),
+        hypothesisId: "H-C",
+        runId: "pre-fix",
+      }),
+    }).catch(() => {});
+    // #endregion
+    res.status(404).send("No valid coordinates");
+    return;
+  }
+
+  const key = getGoogleMapsApiKey();
+  if (!key) {
+    // #region agent log
+    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "3d958d",
+      },
+      body: JSON.stringify({
+        sessionId: "3d958d",
+        location: "server/index.ts:itinerary-static-map:503",
+        message: "no google key",
+        data: {},
+        timestamp: Date.now(),
+        hypothesisId: "H-C",
+        runId: "pre-fix",
+      }),
+    }).catch(() => {});
+    // #endregion
+    res.status(503).send("GOOGLE_MAPS_API_KEY not configured");
+    return;
+  }
+
+  try {
+    const png = await fetchItineraryStaticMapPng(points, key);
+    if (!png) {
+      // #region agent log
+      fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "3d958d",
+        },
+        body: JSON.stringify({
+          sessionId: "3d958d",
+          location: "server/index.ts:itinerary-static-map:502",
+          message: "fetchItineraryStaticMapPng returned null",
+          data: { pointCount: points.length },
+          timestamp: Date.now(),
+          hypothesisId: "H-A,H-D",
+          runId: "pre-fix",
+        }),
+      }).catch(() => {});
+      // #endregion
+      res.status(502).send("Static map request failed");
+      return;
+    }
+    // #region agent log
+    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "3d958d",
+      },
+      body: JSON.stringify({
+        sessionId: "3d958d",
+        location: "server/index.ts:itinerary-static-map:200",
+        message: "sending png to client",
+        data: { byteLength: png.length, pointCount: points.length },
+        timestamp: Date.now(),
+        hypothesisId: "H-B",
+        runId: "pre-fix",
+      }),
+    }).catch(() => {});
+    // #endregion
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.type("image/png").send(png);
+  } catch (err) {
+    console.error("itinerary-static-map:", err);
+    // #region agent log
+    fetch("http://127.0.0.1:7929/ingest/314be68e-e9da-4796-b54a-6124a2eda6f4", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "3d958d",
+      },
+      body: JSON.stringify({
+        sessionId: "3d958d",
+        location: "server/index.ts:itinerary-static-map:500",
+        message: "handler threw",
+        data: {
+          err: err instanceof Error ? err.message : String(err),
+        },
+        timestamp: Date.now(),
+        hypothesisId: "H-B",
+        runId: "pre-fix",
+      }),
+    }).catch(() => {});
+    // #endregion
+    res.status(500).send("Server error");
+  }
 });
 
 // ── TikTok Transcript (proxy to ScrapeCreators) ─────────────────────────────
@@ -88,9 +288,11 @@ app.post("/api/tiktok/transcript", async (req, res) => {
 // ── Extract Activities ───────────────────────────────────────────────────────
 
 app.post("/api/extract-activities", async (req, res) => {
-  const { content, sourceUrl } = req.body as {
+  const { content, sourceUrl, destination } = req.body as {
     content: string;
     sourceUrl?: string;
+    /** Trip city/region — used with Google Geocoding to pin accurate coordinates */
+    destination?: string;
   };
 
   if (!content?.trim()) {
@@ -121,11 +323,107 @@ app.post("/api/extract-activities", async (req, res) => {
 
     const text =
       message.content[0].type === "text" ? message.content[0].text : "";
-    const activities = tryParseJson(text);
+    let activities = tryParseJson(text);
+
+    if (!Array.isArray(activities)) {
+      res
+        .status(500)
+        .json({ error: "Expected a JSON array of activities from the model" });
+      return;
+    }
+
+    const gKey = getGoogleMapsApiKey();
+    const dest = destination?.trim();
+    if (
+      gKey &&
+      dest &&
+      activities.length > 0
+    ) {
+      try {
+        activities = await enrichRawActivitiesWithGeocode(
+          activities,
+          dest,
+          gKey,
+        );
+      } catch (geoErr: unknown) {
+        console.warn(
+          "Geocoding after extract failed:",
+          geoErr instanceof Error ? geoErr.message : geoErr,
+        );
+      }
+    }
+
     res.json({ activities });
   } catch (err: any) {
     console.error("extract-activities error:", err?.message ?? err);
     res.status(500).json({ error: err?.message ?? "LLM request failed" });
+  }
+});
+
+// ── Geocode place names (import sheet, etc.) ─────────────────────────────────
+
+app.post("/api/geocode-places", async (req, res) => {
+  const { destination, places } = req.body as {
+    destination: string;
+    places: Array<{ name: string; neighborhood?: string }>;
+  };
+
+  if (!destination?.trim() || !Array.isArray(places)) {
+    res.status(400).json({ error: "destination and places array required" });
+    return;
+  }
+
+  const gKey = getGoogleMapsApiKey();
+  if (!gKey) {
+    res.status(503).json({ error: "GOOGLE_MAPS_API_KEY not configured" });
+    return;
+  }
+
+  try {
+    let destinationCenter: { lat: number; lng: number } | null = null;
+    const center = await geocodeQuery(destination.trim(), gKey);
+    if (center) {
+      destinationCenter = { lat: center.lat, lng: center.lng };
+    }
+
+    const locations: Array<{
+      lat: number;
+      lng: number;
+      neighborhood: string;
+      googlePlaceId: string;
+      formattedAddress?: string;
+    } | null> = [];
+
+    for (const p of places) {
+      if (!p?.name?.trim()) {
+        locations.push(null);
+        continue;
+      }
+      const g = await geocodePlaceInDestination(
+        p.name.trim(),
+        p.neighborhood?.trim() ?? "",
+        destination.trim(),
+        gKey,
+      );
+      locations.push(
+        g
+          ? {
+              lat: g.lat,
+              lng: g.lng,
+              neighborhood: g.neighborhood,
+              googlePlaceId: g.googlePlaceId,
+              formattedAddress: g.formattedAddress,
+            }
+          : null,
+      );
+    }
+
+    res.json({ locations, destinationCenter });
+  } catch (err: unknown) {
+    console.error("geocode-places error:", err);
+    res.status(500).json({
+      error: err instanceof Error ? err.message : "Geocoding failed",
+    });
   }
 });
 
@@ -192,7 +490,62 @@ ${JSON.stringify(activities, null, 2)}
 
     const text =
       message.content[0].type === "text" ? message.content[0].text : "";
-    const result = tryParseJson(text);
+    const result = tryParseJson(text) as {
+      days?: Array<{
+        date: string;
+        stops: Array<{
+          activityId: string;
+          startTime: string;
+          endTime: string;
+          travelToNext: { duration: number; mode: string };
+          priority: number;
+        }>;
+      }>;
+      reasoning?: string;
+    };
+
+    const gKey = getGoogleMapsApiKey();
+    if (
+      gKey &&
+      result.days?.length &&
+      Array.isArray(activities) &&
+      activities.length > 0
+    ) {
+      const activityLocations = new Map(
+        activities.map((a) => [
+          a.id,
+          { lat: a.location.lat, lng: a.location.lng },
+        ]),
+      );
+      try {
+        const normalizedDays: ItineraryDayLike[] = result.days.map((d) => ({
+          date: d.date,
+          stops: d.stops.map((s) => {
+            const m = s.travelToNext.mode;
+            const mode: TransitModeHint =
+              m === "walk" || m === "transit" || m === "taxi" ? m : "walk";
+            return {
+              ...s,
+              travelToNext: {
+                duration: s.travelToNext.duration,
+                mode,
+              },
+            };
+          }),
+        }));
+        result.days = await enrichItineraryTravelTimes(
+          normalizedDays,
+          activityLocations,
+          gKey,
+        );
+      } catch (dmErr: unknown) {
+        console.warn(
+          "Distance Matrix enrichment failed:",
+          dmErr instanceof Error ? dmErr.message : dmErr,
+        );
+      }
+    }
+
     res.json(result);
   } catch (err: any) {
     console.error("generate-itinerary error:", err?.message ?? err);
@@ -285,5 +638,8 @@ app.listen(PORT, () => {
   console.log(`✓ WanderSync API server on http://localhost:${PORT}`);
   console.log(
     `  Claude:  ${getClient() ? "connected" : "⚠ no API key — will return 503"}`,
+  );
+  console.log(
+    `  Google:  ${getGoogleMapsApiKey() ? "Geocoding + Distance Matrix + Static Maps" : "⚠ no GOOGLE_MAPS_API_KEY — coords/travel from LLM only"}`,
   );
 });

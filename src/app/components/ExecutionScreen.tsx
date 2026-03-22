@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { getGoogleMapsDirectionsUrl } from "../../lib/maps-url";
 import { useTripStore } from "../../lib/store";
 
 const CORAL = "#E85D3A";
@@ -300,9 +301,8 @@ export function ExecutionScreen({ tripId, onHome, onViewPlan, onSalvage }: Execu
   };
 
   const handleNavigate = () => {
-    const { lat, lng } = activity.location;
     window.open(
-      `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
+      getGoogleMapsDirectionsUrl(activity, trip?.destination),
       "_blank",
     );
   };

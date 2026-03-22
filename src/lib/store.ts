@@ -470,7 +470,12 @@ export const useTripStore = create<TripStore>()(
       // ── LLM-powered async actions ─────────────────────────────
 
       extractAndAddActivities: async (tripId, content, sourceUrl) => {
-        const result = await extractActivities(content, sourceUrl);
+        const trip = get().getTrip(tripId);
+        const result = await extractActivities(
+          content,
+          sourceUrl,
+          trip?.destination,
+        );
         if (result.activities.length > 0) {
           get().addActivities(tripId, result.activities);
         }

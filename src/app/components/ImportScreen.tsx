@@ -134,7 +134,6 @@ function activitiesToPlaces(activities: Activity[]): ExtractedPlace[] {
 interface ImportScreenProps {
   onBack: () => void;
   onGoHome?: () => void;
-  onContinueToVoting?: () => void;
   tripId?: string;
   tripName?: string;
   /**
@@ -144,7 +143,7 @@ interface ImportScreenProps {
    */
   onExtract?: (rawUrl: string) => Promise<{ activities: Activity[]; displayUrl: string }>;
   /** Called with checked places after user confirms import */
-  onImportPlaces?: (places: ExtractedPlace[]) => void;
+  onImportPlaces?: (places: ExtractedPlace[]) => void | Promise<void>;
 }
 
 type LoadState = "idle" | "loading" | "done";
@@ -152,7 +151,6 @@ type LoadState = "idle" | "loading" | "done";
 export function ImportScreen({
   onBack,
   onGoHome,
-  onContinueToVoting,
   tripId,
   tripName,
   onExtract,
@@ -198,29 +196,33 @@ export function ImportScreen({
     if (e.key === "Enter") handleExtract();
   };
 
-  const handleImport = (places: ExtractedPlace[], _tripIdFromSheet: string) => {
-    setSheet(false);
+  const handleImport = async (
+    places: ExtractedPlace[],
+    _tripIdFromSheet: string,
+  ) => {
+    if (onImportPlaces) {
+      await onImportPlaces(places);
+      setUrl("");
+      setLoad("idle");
+      setExtractedPlaces(null);
+      return;
+    }
+
     setLoad("idle");
     setUrl("");
     setExtractedPlaces(null);
-    if (onImportPlaces) {
-      onImportPlaces(places);
-      return;
-    }
+
     if (tripId) {
-      const activities: Activity[] = places.map(p => ({
-        id: p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
-        name: p.name,
-        description: "",
-        category: (p.category.toLowerCase() as Activity["category"]) || "culture",
-        estimatedDuration: parseInt(p.duration) || 60,
-        location: { lat: 0, lng: 0, neighborhood: "" },
-        emoji: p.emoji,
-        source: url,
-      }));
+      const { extractedPlacesToActivities } = await import(
+        "../../lib/places-to-activities"
+      );
+      const activities = await extractedPlacesToActivities(
+        places,
+        tripName ?? "",
+        tripName ?? "",
+      );
       useTripStore.getState().addActivities(tripId, activities);
     }
-    setTimeout(() => onContinueToVoting?.(), 200);
   };
 
   return (

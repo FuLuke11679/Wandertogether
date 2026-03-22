@@ -14,6 +14,8 @@ export type Activity = {
     lat: number;
     lng: number;
     neighborhood: string;
+    /** Google Place ID for accurate Maps deep links when present */
+    googlePlaceId?: string;
   };
   category: ActivityCategory;
   estimatedDuration: number; // minutes
