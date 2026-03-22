@@ -5,6 +5,7 @@ import type {
   ItineraryStop,
   ItineraryDay,
 } from "../types";
+import { sanitizeItineraryDays } from "../itinerary-sanitize-times";
 import { post } from "./client";
 
 type ItineraryApiStop = {
@@ -45,10 +46,11 @@ function hydrateDays(
   apiDays: ItineraryApiDay[],
   activityMap: Map<string, Activity>,
 ): ItineraryDay[] {
-  return apiDays.map((d) => ({
+  const raw = apiDays.map((d) => ({
     date: d.date,
     stops: hydrateStops(d.stops, activityMap),
   }));
+  return sanitizeItineraryDays(raw);
 }
 
 function getDatesInRange(start: string, end: string): string[] {

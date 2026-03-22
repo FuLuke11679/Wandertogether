@@ -1,4 +1,5 @@
 import type { Activity } from "../types";
+import { clampExtractedEstimatedDuration } from "../clamp-extracted-duration";
 import { post } from "./client";
 
 type RawExtracted = {
@@ -16,12 +17,15 @@ function toActivity(raw: RawExtracted, sourceUrl?: string): Activity {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
+  const category = (raw.category ?? "culture") as Activity["category"];
+  const rawMin = raw.estimatedDuration ?? 60;
+
   return {
     id,
     name: raw.name,
     description: raw.description,
-    category: (raw.category ?? "culture") as Activity["category"],
-    estimatedDuration: raw.estimatedDuration ?? 60,
+    category,
+    estimatedDuration: clampExtractedEstimatedDuration(rawMin, category),
     location: raw.location,
     emoji: raw.emoji,
     source: sourceUrl,

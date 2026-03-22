@@ -48,6 +48,7 @@ interface TripStore {
   // ---------- Trip CRUD ----------
   setCurrentTrip: (tripId: string) => void;
   createTrip: (destination: string, dates: { start: string; end: string }) => string;
+  deleteTrip: (tripId: string) => void;
   addActivities: (tripId: string, activities: Activity[]) => void;
 
   // ---------- Voting ----------
@@ -94,7 +95,8 @@ interface TripStore {
   adaptTripLLM: (
     tripId: string,
     reason?: SalvageReason,
-  ) => Promise<{ message: string; fromLLM: boolean }>;
+    detail?: string,
+  ) => Promise<{ message: string; stops: ItineraryStop[]; fromLLM: boolean }>;
 
   // ---------- Helpers ----------
   getTrip: (tripId: string) => Trip | undefined;
@@ -166,6 +168,16 @@ export const useTripStore = create<TripStore>()(
         set((s) => ({ trips: [...s.trips, trip], currentTripId: id }));
         return id;
       },
+
+      deleteTrip: (tripId) =>
+        set((s) => {
+          const remaining = s.trips.filter((t) => t.id !== tripId);
+          const newCurrentId =
+            s.currentTripId === tripId
+              ? remaining[0]?.id ?? null
+              : s.currentTripId;
+          return { trips: remaining, currentTripId: newCurrentId };
+        }),
 
       addActivities: (tripId, activities) =>
         set((s) => ({
@@ -484,7 +496,7 @@ export const useTripStore = create<TripStore>()(
         return result;
       },
 
-      adaptTripLLM: async (tripId, reason) => {
+      adaptTripLLM: async (tripId, reason, detail) => {
         const trip = get().getTrip(tripId);
         if (!trip) throw new Error("Trip not found");
 
@@ -498,13 +510,10 @@ export const useTripStore = create<TripStore>()(
           trip.activities,
           reason,
           trip.destination,
+          detail,
         );
 
-        if (result.stops.length > 0) {
-          get().applySalvage(tripId, result.stops);
-        }
-
-        return { message: result.message, fromLLM };
+        return { message: result.message, stops: result.stops, fromLLM };
       },
     }),
     {

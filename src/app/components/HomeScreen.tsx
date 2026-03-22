@@ -146,6 +146,8 @@ function PastTripCard({
   avatars,
   delay,
   visible,
+  onClick,
+  onDelete,
 }: {
   image: string;
   city: string;
@@ -153,15 +155,17 @@ function PastTripCard({
   avatars: string[];
   delay: number;
   visible: boolean;
+  onClick?: () => void;
+  onDelete?: () => void;
 }) {
   const [pressed, setPressed] = useState(false);
   return (
     <div
       onMouseDown={() => setPressed(true)}
-      onMouseUp={() => setPressed(false)}
+      onMouseUp={() => { setPressed(false); onClick?.(); }}
       onMouseLeave={() => setPressed(false)}
       onTouchStart={() => setPressed(true)}
-      onTouchEnd={() => setPressed(false)}
+      onTouchEnd={() => { setPressed(false); onClick?.(); }}
       style={{
         width: 160,
         height: 120,
@@ -191,6 +195,41 @@ function PastTripCard({
           background: "linear-gradient(to bottom, rgba(0,0,0,0) 20%, rgba(0,0,0,0.72) 100%)",
         }}
       />
+      {/* Delete button */}
+      {onDelete && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            top: 6,
+            left: 6,
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            background: "rgba(0,0,0,0.45)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            padding: 0,
+            zIndex: 5,
+            transition: "background 0.15s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(200,60,40,0.7)")}
+          onMouseOut={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.45)")}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M2 2l6 6M8 2l-6 6" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
       {/* Content */}
       <div
         style={{
@@ -650,7 +689,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
           </button>
         </div>
 
-        {/* ── PAST TRIPS HORIZONTAL SCROLL ── */}
+        {/* ── TRIPS HORIZONTAL SCROLL ── */}
         <div
           style={{
             paddingLeft: 22,
@@ -669,12 +708,31 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
               scrollbarWidth: "none",
             } as React.CSSProperties}
           >
+            {store.trips.map((t, i) => {
+              const dateLabel = `${new Date(t.dates.start).toLocaleDateString("en-US", { month: "short" })} ${new Date(t.dates.start).getFullYear()}`;
+              const statusLabel = t.itinerary.length > 0
+                ? `${t.activities.length} places · ${t.itinerary.length}d plan`
+                : `${t.activities.length} places`;
+              return (
+                <PastTripCard
+                  key={t.id}
+                  image={t.coverImage ?? TOKYO_IMG}
+                  city={t.destination}
+                  meta={`${dateLabel} · ${statusLabel}`}
+                  avatars={t.members.map((m) => m.initials)}
+                  delay={0.18 + i * 0.08}
+                  visible={visible}
+                  onClick={() => onOpenTrip(t.id)}
+                  onDelete={() => store.deleteTrip(t.id)}
+                />
+              );
+            })}
             <PastTripCard
               image={BARCELONA_IMG}
               city="Barcelona"
               meta="Jan 2026 · Completed"
               avatars={["L", "R", "K"]}
-              delay={0.18}
+              delay={0.18 + store.trips.length * 0.08}
               visible={visible}
             />
             <PastTripCard
@@ -682,7 +740,7 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip }: HomeScree
               city="Seoul"
               meta="Draft · 2 places saved"
               avatars={["Y"]}
-              delay={0.26}
+              delay={0.26 + store.trips.length * 0.08}
               visible={visible}
             />
 
