@@ -52,6 +52,8 @@ interface TripStore {
 
   // ---------- Trip CRUD ----------
   setCurrentTrip: (tripId: string) => void;
+  /** Merge or append a trip and focus it (e.g. hydrate from Supabase before navigating). */
+  upsertTrip: (trip: Trip) => void;
   createTrip: (destination: string, dates: { start: string; end: string }) => string;
   deleteTrip: (tripId: string) => void;
   addActivities: (tripId: string, activities: Activity[]) => void;
@@ -162,6 +164,14 @@ export const useTripStore = create<TripStore>()(
         })),
 
       setCurrentTrip: (tripId) => set({ currentTripId: tripId }),
+
+      upsertTrip: (trip) =>
+        set((s) => ({
+          trips: s.trips.some((t) => t.id === trip.id)
+            ? s.trips.map((t) => (t.id === trip.id ? trip : t))
+            : [...s.trips, trip],
+          currentTripId: trip.id,
+        })),
 
       createTrip: (destination, dates) => {
         const id = `trip-${Date.now()}`;

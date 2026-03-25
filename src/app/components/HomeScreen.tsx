@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { CreateTripSheet } from "./CreateTripSheet";
 import { useTripStore } from "../../lib/store";
 import { SEED_TRIP } from "../../lib/seed-data";
@@ -318,18 +318,47 @@ interface HomeScreenProps {
   onOpenImport?: (tripId: string) => void;
   onCreateTrip?: (tripId: string) => void;
   onOpenProfile?: () => void;
+  authSlot?: ReactNode;
+  /** When true, trip list / create / delete use Supabase-backed props below. */
+  useRemoteTrips?: boolean;
+  remoteTrips?: Trip[];
+  remoteTripsLoading?: boolean;
+  remoteUserDisplayName?: string;
+  onRemoteDeleteTrip?: (tripId: string) => void | Promise<void>;
+  createTripRemoteFn?: (
+    destination: string,
+    dates: { start: string; end: string },
+    invitees: { name: string; initial: string }[],
+  ) => Promise<string>;
 }
 
-export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip, onOpenProfile }: HomeScreenProps) {
+export function HomeScreen({
+  onOpenTrip,
+  onOpenImport,
+  onCreateTrip,
+  onOpenProfile,
+  authSlot,
+  useRemoteTrips = false,
+  remoteTrips = [],
+  remoteTripsLoading = false,
+  remoteUserDisplayName,
+  onRemoteDeleteTrip,
+  createTripRemoteFn,
+}: HomeScreenProps) {
   const [visible, setVisible]         = useState(false);
   const [heroPressed, setHeroPressed] = useState(false);
   const [createOpen, setCreateOpen]   = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const trips = useTripStore((s) => s.trips);
+  const storeTrips = useTripStore((s) => s.trips);
   const currentTripId = useTripStore((s) => s.currentTripId);
   const setCurrentTrip = useTripStore((s) => s.setCurrentTrip);
-  const deleteTrip = useTripStore((s) => s.deleteTrip);
-  const displayName = useTripStore((s) => s.userProfile.displayName);
+  const deleteTripStore = useTripStore((s) => s.deleteTrip);
+  const storeDisplayName = useTripStore((s) => s.userProfile.displayName);
+
+  const trips = useRemoteTrips ? remoteTrips : storeTrips;
+
+  const displayName =
+    remoteUserDisplayName !== undefined ? remoteUserDisplayName : storeDisplayName;
 
   const greetingFirst = useMemo(() => {
     const t = displayName.trim();
@@ -343,27 +372,41 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip, onOpenProfi
   }, [displayName]);
 
   const activeTrip = useMemo(() => {
+    if (useRemoteTrips) {
+      const direct = trips.find((t) => t.id === currentTripId);
+      return direct ?? trips[0] ?? null;
+    }
     const direct = trips.find((t) => t.id === currentTripId);
     if (direct) return direct;
     const seed = trips.find((t) => t.id === SEED_TRIP.id);
     if (seed) return seed;
     return trips[0] ?? null;
-  }, [trips, currentTripId]);
+  }, [trips, currentTripId, useRemoteTrips]);
 
   const tripsForList = useMemo(() => {
+    if (useRemoteTrips) return [...trips];
     const seed = trips.find((t) => t.id === SEED_TRIP.id);
     const rest = trips.filter((t) => t.id !== SEED_TRIP.id);
     return seed ? [seed, ...rest] : [...trips];
-  }, [trips]);
+  }, [trips, useRemoteTrips]);
 
   useEffect(() => {
     if (!trips.length) return;
     const direct = trips.find((t) => t.id === currentTripId);
     if (!direct) {
-      const seed = trips.find((t) => t.id === SEED_TRIP.id);
-      setCurrentTrip(seed?.id ?? trips[0].id);
+      if (useRemoteTrips) {
+        setCurrentTrip(trips[0]!.id);
+      } else {
+        const seed = trips.find((t) => t.id === SEED_TRIP.id);
+        setCurrentTrip(seed?.id ?? trips[0]!.id);
+      }
     }
-  }, [trips, currentTripId, setCurrentTrip]);
+  }, [trips, currentTripId, setCurrentTrip, useRemoteTrips]);
+
+  const handleDeleteTrip = (tripId: string) => {
+    if (onRemoteDeleteTrip) void onRemoteDeleteTrip(tripId);
+    else deleteTripStore(tripId);
+  };
 
   const openActivePlan = () => {
     const id = activeTrip?.id;
@@ -497,6 +540,8 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip, onOpenProfi
             </span>
           </button>
         </div>
+
+        {authSlot}
 
         {/* ── GREETING ── */}
         <div
@@ -809,17 +854,31 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip, onOpenProfi
               scrollbarWidth: "none",
             } as React.CSSProperties}
           >
-            {tripsForList.map((trip, i) => (
-              <StoreTripCard
-                key={trip.id}
-                trip={trip}
-                isActive={trip.id === currentTripId}
-                onSelect={() => setCurrentTrip(trip.id)}
-                delay={0.18 + i * 0.07}
-                visible={visible}
-                onDelete={() => deleteTrip(trip.id)}
-              />
-            ))}
+            {remoteTripsLoading && useRemoteTrips ? (
+              <span
+                style={{
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: 12,
+                  color: "#9A9080",
+                  paddingRight: 22,
+                  alignSelf: "center",
+                }}
+              >
+                Loading trips…
+              </span>
+            ) : (
+              tripsForList.map((trip, i) => (
+                <StoreTripCard
+                  key={trip.id}
+                  trip={trip}
+                  isActive={trip.id === currentTripId}
+                  onSelect={() => setCurrentTrip(trip.id)}
+                  delay={0.18 + i * 0.07}
+                  visible={visible}
+                  onDelete={() => handleDeleteTrip(trip.id)}
+                />
+              ))
+            )}
 
             {/* "More" ghost card */}
             <div
@@ -1109,7 +1168,11 @@ export function HomeScreen({ onOpenTrip, onOpenImport, onCreateTrip, onOpenProfi
       {createOpen && (
         <CreateTripSheet
           onClose={() => setCreateOpen(false)}
-          onCreate={(tripId) => { setCreateOpen(false); (onCreateTrip ?? onOpenImport ?? onOpenTrip)(tripId); }}
+          createTripFn={createTripRemoteFn}
+          onCreate={(tripId) => {
+            setCreateOpen(false);
+            (onCreateTrip ?? onOpenImport ?? onOpenTrip)(tripId);
+          }}
         />
       )}
     </div>

@@ -100,9 +100,19 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 interface CreateTripSheetProps {
   onClose: () => void;
   onCreate: (tripId: string) => void;
+  /** When set, creates the trip remotely (e.g. Supabase) instead of the Zustand store. */
+  createTripFn?: (
+    destination: string,
+    dates: { start: string; end: string },
+    invitees: { name: string; initial: string }[],
+  ) => Promise<string>;
 }
 
-export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
+export function CreateTripSheet({
+  onClose,
+  onCreate,
+  createTripFn,
+}: CreateTripSheetProps) {
   const [sheetIn, setSheetIn] = useState(false);
   const [copied, setCopied] = useState(false);
   const [emailVal, setEmailVal] = useState("");
@@ -182,27 +192,60 @@ export function CreateTripSheet({ onClose, onCreate }: CreateTripSheetProps) {
     if (end < start) {
       end = start;
     }
-    const tripId = store.createTrip(destVal.split(",")[0].trim(), {
+    const destination = destVal.split(",")[0].trim();
+    const invitees = members
+      .filter((m) => !m.isYou)
+      .map((m) => ({ name: m.name, initial: m.initial }));
+
+    const finish = (tripId: string) => {
+      setTimeout(() => {
+        setSheetIn(false);
+        setTimeout(() => onCreate(tripId), 380);
+      }, 160);
+    };
+
+    if (createTripFn) {
+      void (async () => {
+        try {
+          const tripId = await createTripFn(destination, { start, end }, invitees);
+          finish(tripId);
+        } catch (e) {
+          console.error("createTripFn", e);
+        } finally {
+          setCreatePressed(false);
+        }
+      })();
+      return;
+    }
+
+    const tripId = store.createTrip(destination, {
       start,
       end,
     });
-    members.filter(m => !m.isYou).forEach((m) => {
+    invitees.forEach((m) => {
       const trips = useTripStore.getState().trips;
-      const trip = trips.find(t => t.id === tripId);
-      if (trip && !trip.members.some(mem => mem.name === m.name)) {
-        useTripStore.setState(s => ({
-          trips: s.trips.map(t =>
+      const trip = trips.find((t) => t.id === tripId);
+      if (trip && !trip.members.some((mem) => mem.name === m.name)) {
+        useTripStore.setState((s) => ({
+          trips: s.trips.map((t) =>
             t.id === tripId
-              ? { ...t, members: [...t.members, { id: m.name.toLowerCase(), name: m.name, initials: m.initial }] }
-              : t
+              ? {
+                  ...t,
+                  members: [
+                    ...t.members,
+                    {
+                      id: m.name.toLowerCase(),
+                      name: m.name,
+                      initials: m.initial,
+                    },
+                  ],
+                }
+              : t,
           ),
         }));
       }
     });
-    setTimeout(() => {
-      setSheetIn(false);
-      setTimeout(() => onCreate(tripId), 380);
-    }, 160);
+    finish(tripId);
   };
 
   const handleAddMember = () => {
