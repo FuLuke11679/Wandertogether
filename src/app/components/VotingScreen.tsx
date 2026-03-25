@@ -53,20 +53,31 @@ interface VotingScreenProps {
   tripId: string;
   onSeeResults: () => void;
   onBack: () => void;
+  /** When signed in to Supabase, use session user id so rankings row matches RLS. */
+  voterUserId?: string;
+  voterUserName?: string;
 }
 
-export function VotingScreen({ tripId, onSeeResults, onBack }: VotingScreenProps) {
+export function VotingScreen({
+  tripId,
+  onSeeResults,
+  onBack,
+  voterUserId = CURRENT_USER_ID,
+  voterUserName = CURRENT_USER_NAME,
+}: VotingScreenProps) {
   const store = useTripStore();
   const comparisonCount = useTripStore((s) => s.comparisonCount);
   const totalSteps = store.getRecommendedTotal(tripId);
-  const pair = store.getCurrentPair(tripId, CURRENT_USER_ID);
+  const pair = store.getCurrentPair(tripId, voterUserId);
+  const trip = store.getTrip(tripId);
+  const hasVoterRanking = !!trip?.rankings.some((r) => r.userId === voterUserId);
 
   const [selected, setSelected] = useState<"a" | "b" | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
 
   useEffect(() => {
-    store.startVoting(tripId, CURRENT_USER_ID, CURRENT_USER_NAME);
-  }, [tripId]);
+    store.startVoting(tripId, voterUserId, voterUserName);
+  }, [tripId, voterUserId, voterUserName, store]);
 
   const step = comparisonCount + 1;
   const progressPct = Math.min((comparisonCount / totalSteps) * 100, 100);
@@ -96,7 +107,7 @@ export function VotingScreen({ tripId, onSeeResults, onBack }: VotingScreenProps
     setSelected(card);
     setPhase("pick");
 
-    store.recordVote(tripId, CURRENT_USER_ID, winnerId, loserId);
+    store.recordVote(tripId, voterUserId, winnerId, loserId);
 
     setTimeout(advanceToNext, 720);
   };
@@ -105,15 +116,16 @@ export function VotingScreen({ tripId, onSeeResults, onBack }: VotingScreenProps
     if (phase !== "idle" || !pair) return;
 
     const pairKey = [pair.a.id, pair.b.id].sort().join(":");
-    useTripStore.setState((s) => ({
-      completedPairs: [...s.completedPairs, pairKey],
-      comparisonCount: s.comparisonCount + 1,
-    }));
+    store.skipComparisonPair(tripId, pairKey);
 
     advanceToNext();
   };
 
+  // startVoting runs in useEffect — first paint has no ranking yet; do not treat as "done".
   if (!pair && phase !== "exit" && phase !== "finishing") {
+    if (!hasVoterRanking) {
+      return null;
+    }
     store.generateGroupPriorities(tripId);
     onSeeResults();
     return null;

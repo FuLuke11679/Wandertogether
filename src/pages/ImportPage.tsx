@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ImportScreen } from "../app/components/ImportScreen";
 import { useTripStore } from "../lib/store";
+import { useRemoteTripHydrate } from "../lib/supabase/use-remote-trip-hydrate";
 import { isTikTokUrl, normalizeTikTokUrl } from "../lib/tiktok-url";
 import { fetchTikTokTranscript } from "../lib/tiktok-transcript";
 import { extractActivities } from "../lib/llm/extract-activities";
@@ -12,14 +13,29 @@ export function ImportPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const getTrip = useTripStore((s) => s.getTrip);
+  const setCurrentTrip = useTripStore((s) => s.setCurrentTrip);
   const addActivities = useTripStore((s) => s.addActivities);
+  const hydrateReady = useRemoteTripHydrate(id);
   const trip = id ? getTrip(id) : undefined;
 
   useEffect(() => {
-    if (!id || !trip) navigate("/", { replace: true });
-  }, [id, trip, navigate]);
+    if (id) setCurrentTrip(id);
+  }, [id, setCurrentTrip]);
 
-  if (!id || !trip) {
+  useEffect(() => {
+    if (!id) {
+      navigate("/", { replace: true });
+      return;
+    }
+    if (!hydrateReady) return;
+    if (!trip) navigate("/", { replace: true });
+  }, [id, trip, hydrateReady, navigate]);
+
+  if (!id || !hydrateReady) {
+    return null;
+  }
+
+  if (!trip) {
     return null;
   }
 

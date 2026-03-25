@@ -314,9 +314,9 @@ function StoreTripCard({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 interface HomeScreenProps {
-  onOpenTrip: (tripId: string) => void;
-  onOpenImport?: (tripId: string) => void;
-  onCreateTrip?: (tripId: string) => void;
+  onOpenTrip: (tripId: string) => void | Promise<void>;
+  onOpenImport?: (tripId: string) => void | Promise<void>;
+  onCreateTrip?: (tripId: string) => void | Promise<void>;
   onOpenProfile?: () => void;
   authSlot?: ReactNode;
   /** When true, trip list / create / delete use Supabase-backed props below. */

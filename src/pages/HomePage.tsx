@@ -7,6 +7,9 @@ import { SEED_TRIP } from "../lib/seed-data";
 import type { Trip } from "../lib/types";
 import { useAuth } from "../lib/supabase/auth-context";
 import { getSupabase } from "../lib/supabase/client";
+import { isRemoteTripId } from "../lib/supabase/activities";
+import { applyHydratedTripBundle } from "../lib/supabase/apply-hydrated-bundle";
+import { fetchHydratedTripBundle } from "../lib/supabase/remote-sync";
 import {
   createTripRemote,
   deleteTripRemote,
@@ -68,10 +71,21 @@ export function HomePage() {
     }
   }, [useRemoteHome, setCurrentTrip]);
 
-  const withTrip = (tripId: string, path: string) => {
+  const withTrip = async (tripId: string, path: string) => {
     if (useRemoteHome) {
-      const t = remoteTrips.find((x) => x.id === tripId);
-      if (t) upsertTrip(t);
+      const supabase = getSupabase();
+      if (supabase && isRemoteTripId(tripId)) {
+        const bundle = await fetchHydratedTripBundle(supabase, tripId);
+        if (bundle) {
+          applyHydratedTripBundle(bundle);
+        } else {
+          const t = remoteTrips.find((x) => x.id === tripId);
+          if (t) upsertTrip(t);
+        }
+      } else {
+        const t = remoteTrips.find((x) => x.id === tripId);
+        if (t) upsertTrip(t);
+      }
     }
     setCurrentTrip(tripId);
     navigate(path);

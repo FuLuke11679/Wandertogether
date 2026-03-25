@@ -20,4 +20,6 @@ If you already have an `on_auth_user_created` trigger on `auth.users`, drop it f
 
 ## 4. App behavior
 
-With env vars set, the **Home** screen shows a sign-in card. After **email/password** or **Google** sign-in, trips load from the `trips` table; creating or deleting trips uses Supabase. Other screens still use the Zustand store—opening a trip from Home calls `upsertTrip` so the current trip exists locally until you migrate those flows.
+With env vars set, the **Home** screen shows a sign-in card. After **email/password** or **Google** sign-in, trips load from the `trips` table; creating or deleting trips uses Supabase. **Import / add activities** (Zustand `addActivities`) also syncs the full activity list to `public.activities` when the trip id is a Supabase UUID and you are signed in (trip owner per RLS).
+
+Other trip fields still use the Zustand store until migrated—opening a trip from Home calls `upsertTrip` so the current trip exists locally.

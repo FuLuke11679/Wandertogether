@@ -29,12 +29,13 @@ import {
 import { extractActivities } from "./llm/extract-activities";
 import { generateItinerary } from "./llm/generate-itinerary";
 import { adaptTrip } from "./llm/adapt-trip";
+import { isRemoteTripId } from "./supabase/activities";
 
 // ---------------------------------------------------------------------------
 // Store interface
 // ---------------------------------------------------------------------------
 
-interface TripStore {
+export interface TripStore {
   // Data
   trips: Trip[];
   currentTripId: string | null;
@@ -61,6 +62,8 @@ interface TripStore {
   // ---------- Voting ----------
   startVoting: (tripId: string, userId: string, userName: string) => void;
   recordVote: (tripId: string, userId: string, winnerId: string, loserId: string) => void;
+  /** Mark a comparison as seen without updating Elo (skip). */
+  skipComparisonPair: (tripId: string, pairKey: string) => void;
   getCurrentPair: (tripId: string, userId: string) => ComparisonPair | null;
   getRecommendedTotal: (tripId: string) => number;
   isVotingComplete: (tripId: string) => boolean;
@@ -201,7 +204,7 @@ export const useTripStore = create<TripStore>()(
           return { trips: remaining, currentTripId: newCurrentId };
         }),
 
-      addActivities: (tripId, activities) =>
+      addActivities: (tripId, activities) => {
         set((s) => ({
           trips: updateTrip(s.trips, tripId, (t) => ({
             activities: [
@@ -211,7 +214,9 @@ export const useTripStore = create<TripStore>()(
               ),
             ],
           })),
-        })),
+        }));
+        enqueueRemoteTripSync(tripId);
+      },
 
       // ── Voting ───────────────────────────────────────────────
 
@@ -231,6 +236,7 @@ export const useTripStore = create<TripStore>()(
           completedPairs: [],
           comparisonCount: 0,
         }));
+        enqueueRemoteTripSync(tripId);
       },
 
       recordVote: (tripId, userId, winnerId, loserId) => {
@@ -252,6 +258,15 @@ export const useTripStore = create<TripStore>()(
           completedPairs: [...s.completedPairs, pairKey],
           comparisonCount: s.comparisonCount + 1,
         }));
+        enqueueRemoteTripSync(tripId);
+      },
+
+      skipComparisonPair: (tripId, pairKey) => {
+        set((s) => ({
+          completedPairs: [...s.completedPairs, pairKey],
+          comparisonCount: s.comparisonCount + 1,
+        }));
+        enqueueRemoteTripSync(tripId);
       },
 
       getCurrentPair: (tripId, userId) => {
@@ -280,33 +295,39 @@ export const useTripStore = create<TripStore>()(
 
       // ── Rankings ─────────────────────────────────────────────
 
-      generateGroupPriorities: (tripId) =>
+      generateGroupPriorities: (tripId) => {
         set((s) => ({
           trips: updateTrip(s.trips, tripId, (t) => ({
             groupPriorities: mergeGroupRankings(t.rankings),
           })),
-        })),
+        }));
+        enqueueRemoteTripSync(tripId);
+      },
 
       // ── Preferences ──────────────────────────────────────────
 
-      setPreferences: (tripId, prefs) =>
+      setPreferences: (tripId, prefs) => {
         set((s) => ({
           trips: updateTrip(s.trips, tripId, (t) => ({
             preferences: { ...t.preferences, ...prefs },
           })),
-        })),
+        }));
+        enqueueRemoteTripSync(tripId);
+      },
 
       // ── Itinerary ────────────────────────────────────────────
 
-      setItinerary: (tripId, days) =>
+      setItinerary: (tripId, days) => {
         set((s) => ({
           trips: updateTrip(s.trips, tripId, () => ({
             itinerary: days,
             status: "active",
           })),
-        })),
+        }));
+        enqueueRemoteTripSync(tripId);
+      },
 
-      loadFallbackItinerary: (tripId) =>
+      loadFallbackItinerary: (tripId) => {
         set((s) => ({
           trips: updateTrip(s.trips, tripId, () => ({
             itinerary: FALLBACK_ITINERARY.map((day) => ({
@@ -315,7 +336,9 @@ export const useTripStore = create<TripStore>()(
             })),
             status: "active",
           })),
-        })),
+        }));
+        enqueueRemoteTripSync(tripId);
+      },
 
       getDayStops: (tripId, dayIndex) => {
         const trip = get().getTrip(tripId);
@@ -361,6 +384,7 @@ export const useTripStore = create<TripStore>()(
             startedAt: new Date().toISOString(),
           },
         }));
+        enqueueRemoteTripSync(tripId);
       },
 
       advanceStop: (tripId) => {
@@ -396,6 +420,7 @@ export const useTripStore = create<TripStore>()(
             completedIds: [...s.execution.completedIds, currentStop.activity.id],
           },
         }));
+        enqueueRemoteTripSync(tripId);
       },
 
       skipStop: (tripId) => {
@@ -431,6 +456,7 @@ export const useTripStore = create<TripStore>()(
             skippedIds: [...s.execution.skippedIds, currentStop.activity.id],
           },
         }));
+        enqueueRemoteTripSync(tripId);
       },
 
       shouldTriggerSalvage: (tripId) => {
@@ -482,6 +508,7 @@ export const useTripStore = create<TripStore>()(
             skippedIds: [],
           },
         }));
+        enqueueRemoteTripSync(tripId);
       },
 
       applyFallbackSalvage: (tripId) => {
@@ -584,3 +611,19 @@ export const useTripStore = create<TripStore>()(
     },
   ),
 );
+
+export function enqueueRemoteTripSync(tripId: string): void {
+  if (!isRemoteTripId(tripId)) return;
+  void import("./supabase/remote-sync").then(({ pushRemoteTripSnapshot }) => {
+    pushRemoteTripSnapshot(() => {
+      const s = useTripStore.getState();
+      return {
+        getTrip: s.getTrip,
+        execution: s.execution,
+        completedPairs: s.completedPairs,
+        comparisonCount: s.comparisonCount,
+        currentTripId: s.currentTripId,
+      };
+    }, tripId);
+  });
+}
